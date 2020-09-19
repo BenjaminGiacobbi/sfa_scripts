@@ -1,4 +1,6 @@
 from pathlib import Path
+import re
+
 
 class SceneFile(object):
     """Abstract representation of a scene file"""
@@ -25,11 +27,16 @@ class SceneFile(object):
     def _init_from_path(self, path):
         path = Path(path)
         self.folder_path = path.parent
-        self.ext = path.suffix
-        self.descriptor, self.task, ver = path.stem.split("_")
-        self.ver = int(ver.split("v")[-1])
+        property_list = re.findall(r'([^\W_v]+|\.[A-Za-z0-9]+)', path.name)
+        self.descriptor, self.task, ver, self.ext = property_list
+        self.ver = int(ver.lstrip("0"))
 
 
-scene_file = SceneFile("D:/tank_model_v001.ma")
+scene_file = SceneFile("D:/assets/tank_model_v001.ma")
 print(scene_file.path)
+print(scene_file.folder_path)
 print(scene_file.filename)
+print(scene_file.descriptor)
+print(scene_file.task)
+print(scene_file.ver)
+print(scene_file.ext)
