@@ -12,8 +12,8 @@ class SceneFile(object):
         self.folder_path = Path()
         self.descriptor = "main"
         self.task = "none"
-        self.version = 1
-        self.version = ".ma"
+        self.ver = 1
+        self.ext = ".ma"
         scene = pmc.system.sceneName()
         if not path and scene:
             path = scene
@@ -68,10 +68,9 @@ class SceneFile(object):
         if not matching_scene_files:
             return 1
         matching_scene_files.sort()
-        latest_scene_file = matching_scene_files[-1]
-        latest_scene_file = latest_scene_file.name.stripext()
-        latest_ver_num = int(latest_scene_file.split('_v')[-1])
-        return latest_ver_num + 1
+        version_match = re.search(r'[0-9]{3}', matching_scene_files[-1])
+        latest_version = int(version_match.group())
+        return latest_version + 1
 
     def increment_save(self):
         """Increments the version and saves the scene file
@@ -80,6 +79,7 @@ class SceneFile(object):
         increment to the largest version number available in the folder
 
         Return:
-            Path: the path to the scene file if successful"""
+            Path: the path to the scene file if successful
+        """
         self.ver = self.next_avail_ver()
         self.save()
