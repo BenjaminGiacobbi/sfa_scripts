@@ -1,18 +1,26 @@
 import logging
-from pymel.core.system import Path
 import pymel.core as pmc
+from pymel.core.system import Path
 import re
 
 log = logging.getLogger(__name__)
 
+
 class SceneFile(object):
     """Abstract representation of a scene file"""
-    def __init__(self, path):
+    def __init__(self, path=None):
         self.folder_path = Path()
         self.descriptor = "main"
         self.task = "none"
         self.version = 1
         self.version = ".ma"
+        scene = pmc.system.sceneName()
+        if not path and scene:
+            path = scene
+        if not path and not scene:
+            log.warning("Unable to initialize SceneFile object"
+                        "from a new scene. Please specify a path.")
+            return
         self._init_from_path(path)
 
     @property
@@ -46,5 +54,3 @@ class SceneFile(object):
             log.warning("Missing directories in path. Creating directories...")
             self.folder_path.makedirs_p()
             return pmc.system.saveAs(self.path)
-
-
