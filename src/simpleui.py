@@ -2,10 +2,12 @@ from PySide2 import QtWidgets
 import maya.OpenMayaUI as omui
 from shiboken2 import wrapInstance
 
+
 def maya_main_window():
     """Returns the open maya window as a """
     main_window = omui.MQtUtil.mainWindow()
     return wrapInstance(long(main_window), QtWidgets.QWidget)
+
 
 class SimpleUI(QtWidgets.QDialog):
     """Docstring goes here FIX LATER"""
