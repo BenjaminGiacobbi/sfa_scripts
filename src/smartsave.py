@@ -46,7 +46,7 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.create_connections()
 
     def create_ui(self):
-        # need to find out a solution to prevent this warning
+        # TODO need to find out a solution to prevent this warning
         self.title_lbl = QtWidgets.QLabel("Smart Save")
         self.title_lbl.setStyleSheet("font: 20px")
 
@@ -146,6 +146,7 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.task_le.textEdited.connect(self._update_task_display)
         self.ver_sbx.valueChanged.connect(self._update_ver_display)
         self.save_btn.clicked.connect(self._save)
+        self.save_increment_btn.clicked.connect(self._save_increment)
         self._update_filename_display(desc_val=self.scene_file.descriptor,
                                       task_val=self.scene_file.task,
                                       ver_val=self.scene_file.ver)
@@ -161,12 +162,22 @@ class SmartSaveUI(QtWidgets.QDialog):
     @QtCore.Slot()
     def _save(self):
         """Saves the scene using SceneFile method"""
+        self._set_scene_properties_from_ui()
+        self.scene_file.save()
+
+    @QtCore.Slot()
+    def _save_increment(self):
+        """Save an increment of the scene's version"""
+        self._set_scene_properties_from_ui()
+        self.scene_file.save_increment()
+        self.ver_sbx.setValue(self.scene_file.ver)
+
+    def _set_scene_properties_from_ui(self):
         self.scene_file.folder_path = self.folder_le.text()
         self.scene_file.descriptor = self.descriptor_le.text()
         self.scene_file.task = self.task_le.text()
         self.scene_file.ver = self.ver_sbx.value()
         self.scene_file.ext = ".ma"
-        self.scene_file.save()
 
     @QtCore.Slot()
     def _update_descriptor_display(self):
@@ -190,6 +201,7 @@ class SmartSaveUI(QtWidgets.QDialog):
         self._update_filename_display(desc_val=self.descriptor_le.text(),
                                       task_val=self.task_le.text())
 
+    # TODO this needs work
     @QtCore.Slot()
     def _update_filename_display(self,
                                  desc_val=None,
@@ -206,9 +218,12 @@ class SmartSaveUI(QtWidgets.QDialog):
                                    task=task_val,
                                    ver=ver_val)
         self.save_btn.setText("Save as: \n" + save_str)
+        new_ver = self.scene_file.next_avail_ver(desc=desc_val,
+                                                 task=task_val,
+                                                 ext=self.scene_file.ext)
         inc_str = name_str.format(desc=desc_val,
                                   task=task_val,
-                                  ver=self.scene_file.next_avail_ver())
+                                  ver=new_ver)
         self.save_increment_btn.setText("Increment save as: \n" + inc_str)
 
 
@@ -216,7 +231,7 @@ class SceneFile(object):
     """Abstract representation of a scene file"""
     def __init__(self, path=None):
         self._folder_path = Path(cmds.workspace(query=True,
-                                               rootDirectory=True)) / "scenes"
+                                                rootDirectory=True)) / "scenes"
         self.descriptor = "main"
         self.task = "model"
         self.ver = 1
@@ -269,12 +284,18 @@ class SceneFile(object):
             self.folder_path.makedirs_p()
             return pmc.system.saveAs(self.path)
 
-    def next_avail_ver(self):
+    def next_avail_ver(self, desc=None, task=None, ext=None):
         """Returns the next available version number in the same folder"""
+        if not desc:
+            desc = self.descriptor
+        if not task:
+            task = self.task
+        if not ext:
+            ext = self.ext
         pattern = "{descriptor}_{task}_v*{ext}".format(
-            descriptor=self.descriptor,
-            task=self.task,
-            ext=self.ext)
+            descriptor=desc,
+            task=task,
+            ext=ext)
         matching_scene_files = []
         for file_ in self.folder_path.files():
             if file_.name.fnmatch(pattern):
@@ -286,7 +307,7 @@ class SceneFile(object):
         latest_version = int(version_match.group())
         return latest_version + 1
 
-    def increment_save(self):
+    def save_increment(self):
         """Increments the version and saves the scene file
 
         If the existing version of the file already exists, saves as the
