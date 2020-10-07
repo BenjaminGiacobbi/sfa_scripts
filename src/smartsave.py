@@ -62,6 +62,11 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.setLayout(self.main_lay)
 
     def _create_folder_ui(self):
+        """Lays out widgets for filepath and browse button
+
+        Returns:
+            QHBoxLayout: A layout containing the widgets
+        """
         default_folder = Path(cmds.workspace(query=True, rootDirectory=True))
         default_folder = default_folder / "scenes"
 
@@ -76,6 +81,11 @@ class SmartSaveUI(QtWidgets.QDialog):
         return layout
 
     def _create_filename_ui(self):
+        """Lays out widgets for filename according to convention
+
+        Returns:
+            QGridLayout: A layout containing the widgets
+        """
         self.descriptor_le = QtWidgets.QLineEdit(self.scene_file.descriptor)
         self.descriptor_le.setMaxLength(20)
         self.descriptor_le.setMinimumWidth(100)
@@ -99,6 +109,11 @@ class SmartSaveUI(QtWidgets.QDialog):
         return layout
 
     def _create_filename_headers(self):
+        """Lays out widgets for headers for each filename component
+
+           Returns:
+               QGridLayout: A layout containing the widgets
+        """
         self.descriptor_lbl = QtWidgets.QLabel("Descriptor")
         self.descriptor_lbl.setStyleSheet("font-weight: bold")
         self.task_lbl = QtWidgets.QLabel("Task")
@@ -130,6 +145,7 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.descriptor_le.textEdited.connect(self._update_descriptor_display)
         self.task_le.textEdited.connect(self._update_task_display)
         self.ver_sbx.valueChanged.connect(self._update_ver_display)
+        self.save_btn.clicked.connect(self._save)
         self._update_filename_display(desc_val=self.scene_file.descriptor,
                                       task_val=self.scene_file.task,
                                       ver_val=self.scene_file.ver)
@@ -141,6 +157,16 @@ class SmartSaveUI(QtWidgets.QDialog):
             options=QtWidgets.QFileDialog.ShowDirsOnly |
             QtWidgets.QFileDialog.DontResolveSymlinks)
         self.folder_le.setText(folder)
+
+    @QtCore.Slot()
+    def _save(self):
+        """Saves the scene using SceneFile method"""
+        self.scene_file.folder_path = self.folder_le.text()
+        self.scene_file.descriptor = self.descriptor_le.text()
+        self.scene_file.task = self.task_le.text()
+        self.scene_file.ver = self.ver_sbx.value()
+        self.scene_file.ext = ".ma"
+        self.scene_file.save()
 
     @QtCore.Slot()
     def _update_descriptor_display(self):
@@ -189,7 +215,7 @@ class SmartSaveUI(QtWidgets.QDialog):
 class SceneFile(object):
     """Abstract representation of a scene file"""
     def __init__(self, path=None):
-        self.folder_path = Path(cmds.workspace(query=True,
+        self._folder_path = Path(cmds.workspace(query=True,
                                                rootDirectory=True)) / "scenes"
         self.descriptor = "main"
         self.task = "model"
@@ -204,6 +230,14 @@ class SceneFile(object):
         self._init_from_path(path)
 
     @property
+    def folder_path(self):
+        return self._folder_path
+
+    @folder_path.setter
+    def folder_path(self, val):
+        self._folder_path = Path(val)
+
+    @property
     def filename(self):
         pattern = "{descriptor}_{task}_v{ver:03d}{ext}"
         return pattern.format(descriptor=self.descriptor,
@@ -213,11 +247,11 @@ class SceneFile(object):
 
     @property
     def path(self):
-        return self.folder_path / self.filename
+        return self._folder_path / self.filename
 
     def _init_from_path(self, path):
         path = Path(path)
-        self.folder_path = path.parent
+        self._folder_path = path.parent
         property_list = re.findall(r"([^\W_v]+|\.[A-Za-z0-9]+)", path.name)
         self.descriptor, self.task, ver, self.ext = property_list
         self.ver = int(ver.lstrip("0"))
