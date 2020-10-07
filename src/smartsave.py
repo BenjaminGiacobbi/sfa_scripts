@@ -52,14 +52,12 @@ class SmartSaveUI(QtWidgets.QDialog):
 
         self.folder_lay = self._create_folder_ui()
         self.filename_lay = self._create_filename_ui()
-        self.display_lay = self._create_filename_display()
         self.button_lay = self._create_buttons_ui()
         self.main_lay = QtWidgets.QVBoxLayout()
 
         self.main_lay.addWidget(self.title_lbl)
         self.main_lay.addLayout(self.folder_lay)
         self.main_lay.addLayout(self.filename_lay)
-        self.main_lay.addLayout(self.display_lay)
         self.main_lay.addLayout(self.button_lay)
         self.setLayout(self.main_lay)
 
@@ -79,7 +77,7 @@ class SmartSaveUI(QtWidgets.QDialog):
 
     def _create_filename_ui(self):
         self.descriptor_le = QtWidgets.QLineEdit(self.scene_file.descriptor)
-        self.descriptor_le.setMaxLength(30)
+        self.descriptor_le.setMaxLength(20)
         self.descriptor_le.setMinimumWidth(100)
         self.descriptor_le.setMinimumHeight(30)
 
@@ -114,20 +112,11 @@ class SmartSaveUI(QtWidgets.QDialog):
         layout.addWidget(self.ver_lbl, 0, 4)
         return layout
 
-    def _create_filename_display(self):
-        self.filename_lbl = QtWidgets.QLabel("Saves file as: ")
-        self.filename_comp = QtWidgets.QLabel("")
-
-        layout = QtWidgets.QHBoxLayout()
-        layout.addWidget(self.filename_lbl)
-        layout.addWidget(self.filename_comp)
-        return layout
-
     def _create_buttons_ui(self):
-        self.save_btn = QtWidgets.QPushButton("Save")
+        self.save_btn = QtWidgets.QPushButton()
         self.save_btn.setMinimumHeight(40)
 
-        self.save_increment_btn = QtWidgets.QPushButton("Save Increment")
+        self.save_increment_btn = QtWidgets.QPushButton()
         self.save_increment_btn.setStyleSheet(create_button_stylesheet())
         self.save_increment_btn.setMinimumHeight(40)
 
@@ -137,30 +126,64 @@ class SmartSaveUI(QtWidgets.QDialog):
         return layout
 
     def create_connections(self):
+        self.folder_browse_btn.clicked.connect(self._open_browse_dialog)
         self.descriptor_le.textEdited.connect(self._update_descriptor_display)
         self.task_le.textEdited.connect(self._update_task_display)
+        self.ver_sbx.valueChanged.connect(self._update_ver_display)
+        self._update_filename_display(desc_val=self.scene_file.descriptor,
+                                      task_val=self.scene_file.task,
+                                      ver_val=self.scene_file.ver)
 
+    @QtCore.Slot()
+    def _open_browse_dialog(self):
+        folder = QtWidgets.QFileDialog.getExistingDirectory(
+            parent=self, caption="Browse", dir=self.folder_le.text(),
+            options=QtWidgets.QFileDialog.ShowDirsOnly |
+            QtWidgets.QFileDialog.DontResolveSymlinks)
+        self.folder_le.setText(folder)
+
+    @QtCore.Slot()
     def _update_descriptor_display(self):
-        if self.descriptor_le.text().__len__() < 1:
-            self._update_filename_display(desc_val=self.scene_file.descriptor)
-        else:
-            self._update_filename_display(desc_val=self.descriptor_le.text())
+        desc = None
+        if self.descriptor_le.text().__len__() > 0:
+            desc = self.descriptor_le.text()
+        self._update_filename_display(desc_val=desc,
+                                      task_val=self.task_le.text())
 
+    @QtCore.Slot()
     def _update_task_display(self):
-        if self.task_le.text().__len__() < 1:
-            self._update_filename_display(task_val=self.scene_file.task)
-        else:
-            self._update_filename_display(task_val=self.task_le.text())
+        task = None
+        if self.task_le.text().__len__() > 0:
+            task = self.task_le.text()
+        self._update_filename_display(desc_val=self.descriptor_le.text(),
+                                      task_val=task)
 
+
+    @QtCore.Slot()
+    def _update_ver_display(self):
+        self._update_filename_display(desc_val=self.descriptor_le.text(),
+                                      task_val=self.task_le.text())
+
+    @QtCore.Slot()
     def _update_filename_display(self,
-                                 desc_val='main',
-                                 task_val='model',
-                                 ver_val=1):
+                                 desc_val=None,
+                                 task_val=None,
+                                 ver_val=None):
+        if not desc_val:
+            desc_val = self.scene_file.descriptor
+        if not task_val:
+            task_val = self.scene_file.task
+        if not ver_val:
+            ver_val = self.ver_sbx.value()
         name_str = "{desc}_{task}_v{ver:03d}.ma"
-        name_str = name_str.format(desc=desc_val,
+        save_str = name_str.format(desc=desc_val,
                                    task=task_val,
                                    ver=ver_val)
-        self.filename_comp.setText(name_str)
+        self.save_btn.setText("Save as: \n" + save_str)
+        inc_str = name_str.format(desc=desc_val,
+                                  task=task_val,
+                                  ver=self.scene_file.next_avail_ver())
+        self.save_increment_btn.setText("Increment save as: \n" + inc_str)
 
 
 class SceneFile(object):
