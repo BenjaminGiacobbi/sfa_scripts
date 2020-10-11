@@ -17,6 +17,7 @@ def maya_main_window():
     return wrapInstance(long(main_window), QtWidgets.QWidget)
 
 
+# TODO make button black upon press
 def create_button_stylesheet():
     stylesheet = """
         QPushButton {
@@ -42,8 +43,12 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.setWindowFlags(self.windowFlags() ^
                             QtCore.Qt.WindowContextHelpButtonHint)
         self.scene_file = SceneFile()
+        self.current_ui_desc = self.scene_file.descriptor
+        self.current_ui_task = self.scene_file.task
+        self.current_ui_ver = self.scene_file.ver
         self.create_ui()
         self.create_connections()
+
 
     def create_ui(self):
         # TODO need to find out a solution to prevent this warning
@@ -86,18 +91,18 @@ class SmartSaveUI(QtWidgets.QDialog):
         Returns:
             QGridLayout: A layout containing the widgets
         """
-        self.descriptor_le = QtWidgets.QLineEdit(self.scene_file.descriptor)
+        self.descriptor_le = QtWidgets.QLineEdit(self.current_ui_desc)
         self.descriptor_le.setMaxLength(20)
         self.descriptor_le.setMinimumWidth(100)
         self.descriptor_le.setMinimumHeight(30)
 
-        self.task_le = QtWidgets.QLineEdit(self.scene_file.task)
+        self.task_le = QtWidgets.QLineEdit(self.current_ui_task)
         self.task_le.setMaxLength(10)
         self.task_le.setFixedWidth(100)
         self.task_le.setMinimumHeight(30)
 
         self.ver_sbx = QtWidgets.QSpinBox()
-        self.ver_sbx.setValue(self.scene_file.ver)
+        self.ver_sbx.setValue(self.current_ui_ver)
         self.ver_sbx.setButtonSymbols(QtWidgets.QAbstractSpinBox.PlusMinus)
         self.ver_sbx.setFixedWidth(50)
         self.ver_sbx.setMinimumHeight(30)
@@ -147,9 +152,7 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.ver_sbx.valueChanged.connect(self._update_ver_display)
         self.save_btn.clicked.connect(self._save)
         self.save_increment_btn.clicked.connect(self._save_increment)
-        self._update_filename_display(desc_val=self.scene_file.descriptor,
-                                      task_val=self.scene_file.task,
-                                      ver_val=self.scene_file.ver)
+        self._update_filename_display()
 
     @QtCore.Slot()
     def _open_browse_dialog(self):
@@ -157,74 +160,67 @@ class SmartSaveUI(QtWidgets.QDialog):
             parent=self, caption="Browse", dir=self.folder_le.text(),
             options=QtWidgets.QFileDialog.ShowDirsOnly |
             QtWidgets.QFileDialog.DontResolveSymlinks)
-        self.folder_le.setText(folder)
+        if folder:
+            self.folder_le.setText(folder)
 
     @QtCore.Slot()
     def _save(self):
         """Saves the scene using SceneFile method"""
         self._set_scene_properties_from_ui()
         self.scene_file.save()
+        self._update_filename_display()
 
     @QtCore.Slot()
     def _save_increment(self):
         """Save an increment of the scene's version"""
         self._set_scene_properties_from_ui()
         self.scene_file.save_increment()
-        self.ver_sbx.setValue(self.scene_file.ver)
+        self.current_ui_ver = self.scene_file.ver
+        self._update_filename_display()
 
     def _set_scene_properties_from_ui(self):
         self.scene_file.folder_path = self.folder_le.text()
-        self.scene_file.descriptor = self.descriptor_le.text()
-        self.scene_file.task = self.task_le.text()
-        self.scene_file.ver = self.ver_sbx.value()
+        self.scene_file.descriptor = self.current_ui_desc
+        self.scene_file.task = self.current_ui_task
+        self.scene_file.ver = self.current_ui_ver
         self.scene_file.ext = ".ma"
 
     @QtCore.Slot()
     def _update_descriptor_display(self):
-        desc = None
         if self.descriptor_le.text().__len__() > 0:
-            desc = self.descriptor_le.text()
-        self._update_filename_display(desc_val=desc,
-                                      task_val=self.task_le.text())
+            self.current_ui_desc = self.descriptor_le.text()
+        else:
+            self.current_ui_desc = self.scene_file.descriptor
+        self._update_filename_display()
 
     @QtCore.Slot()
     def _update_task_display(self):
-        task = None
         if self.task_le.text().__len__() > 0:
-            task = self.task_le.text()
-        self._update_filename_display(desc_val=self.descriptor_le.text(),
-                                      task_val=task)
-
+            self.current_ui_task = self.task_le.text()
+        else:
+            self.current_ui_task = self.scene_file.task
+        self._update_filename_display()
 
     @QtCore.Slot()
     def _update_ver_display(self):
-        self._update_filename_display(desc_val=self.descriptor_le.text(),
-                                      task_val=self.task_le.text())
+        self.current_ui_ver = self.ver_sbx.value()
+        self._update_filename_display()
 
     # TODO this needs work
     @QtCore.Slot()
-    def _update_filename_display(self,
-                                 desc_val=None,
-                                 task_val=None,
-                                 ver_val=None):
-        if not desc_val:
-            desc_val = self.scene_file.descriptor
-        if not task_val:
-            task_val = self.scene_file.task
-        if not ver_val:
-            ver_val = self.ver_sbx.value()
-        name_str = "{desc}_{task}_v{ver:03d}.ma"
-        save_str = name_str.format(desc=desc_val,
-                                   task=task_val,
-                                   ver=ver_val)
-        self.save_btn.setText("Save as: \n" + save_str)
-        new_ver = self.scene_file.next_avail_ver(desc=desc_val,
-                                                 task=task_val,
-                                                 ext=self.scene_file.ext)
-        inc_str = name_str.format(desc=desc_val,
-                                  task=task_val,
-                                  ver=new_ver)
-        self.save_increment_btn.setText("Increment save as: \n" + inc_str)
+    def _update_filename_display(self):
+        if self.ver_sbx.value() is not self.current_ui_ver:
+            self.ver_sbx.setValue(self.current_ui_ver)
+        next_ver = self.scene_file.next_avail_ver(desc=self.current_ui_desc,
+                                                  task=self.current_ui_task,
+                                                  ext=self.scene_file.ext)
+        name_str = "{desc}_{task}".format(desc=self.current_ui_desc,
+                                          task=self.current_ui_task)
+        save_str = "_v{ver:03d}.ma".format(ver=self.current_ui_ver)
+        self.save_btn.setText("Save as: \n" + name_str + save_str)
+        inc_str = "_v{ver:03d}.ma".format(ver=next_ver)
+        self.save_increment_btn.setText("Increment save as: \n"
+                                        + name_str + inc_str)
 
 
 class SceneFile(object):
@@ -267,9 +263,13 @@ class SceneFile(object):
     def _init_from_path(self, path):
         path = Path(path)
         self._folder_path = path.parent
-        property_list = re.findall(r"([^\W_v]+|\.[A-Za-z0-9]+)", path.name)
-        self.descriptor, self.task, ver, self.ext = property_list
-        self.ver = int(ver.lstrip("0"))
+        try:
+            property_list = re.findall(r"([^\W_v]+|\.[A-Za-z0-9]+)", path.name)
+            self.descriptor, self.task, ver, self.ext = property_list
+            self.ver = int(ver.lstrip("0"))
+        except ValueError as error:
+            log.warning("File does not match naming convention. "
+                        "Using default values...")
 
     def save(self):
         """Saves the scene file.
@@ -292,10 +292,9 @@ class SceneFile(object):
             task = self.task
         if not ext:
             ext = self.ext
-        pattern = "{descriptor}_{task}_v*{ext}".format(
-            descriptor=desc,
-            task=task,
-            ext=ext)
+        pattern = "{descriptor}_{task}_v*{ext}".format(descriptor=desc,
+                                                       task=task,
+                                                       ext=ext)
         matching_scene_files = []
         for file_ in self.folder_path.files():
             if file_.name.fnmatch(pattern):
