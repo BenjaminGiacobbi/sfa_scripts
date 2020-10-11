@@ -12,13 +12,21 @@ log = logging.getLogger(__name__)
 
 
 def maya_main_window():
-    """Returns the open maya window as a """
+    """Returns the open maya window
+
+    Return:
+        wrapInstance: the maya window as a WrapInstance object
+    """
     main_window = omui.MQtUtil.mainWindow()
     return wrapInstance(long(main_window), QtWidgets.QWidget)
 
 
-# TODO make button black upon press
-def create_button_stylesheet():
+def gold_button_stylesheet():
+    """Styles a QPushButton object as gold with black text.
+
+    Return:
+        stylesheet: A stylesheet with QPushButton selectors
+    """
     stylesheet = """
         QPushButton {
             font-weight: bold;
@@ -54,19 +62,18 @@ class SmartSaveUI(QtWidgets.QDialog):
         super(SmartSaveUI, self).__init__(parent=maya_main_window())
         self.setWindowTitle("Smart Save")
         self.setMinimumWidth(500)
+        self.setMaximumWidth(1000)
         self.setMaximumHeight(200)
-        self.setWindowFlags(self.windowFlags() ^
-                            QtCore.Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags())
         self.scene_file = SceneFile()
-        _check_object_length(self.scene_file, 1, 0)
         self.current_ui_desc = self.scene_file.descriptor
         self.current_ui_task = self.scene_file.task
         self.current_ui_ver = self.scene_file.ver
-        self.create_ui()
+        self._create_ui()
         self._create_connections()
 
-    def create_ui(self):
-        """Creates the main UI window and assembles user controls"""
+    def _create_ui(self):
+        """Creates the main GUI window and assembles user controls"""
         self.title_lbl = QtWidgets.QLabel("Smart Save")
         self.title_lbl.setStyleSheet("font: 20px")
         self.folder_lay = self._create_folder_ui()
@@ -81,15 +88,7 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.setLayout(self.main_lay)
 
     def _create_folder_ui(self):
-        """Lays out widgets for filepath and browse button
-
-        Return:
-            QHBoxLayout: A layout containing the widgets
-        """
-        default_folder = Path(cmds.workspace(query=True, rootDirectory=True))
-        default_folder = default_folder / "scenes"
-
-        self.folder_le = QtWidgets.QLineEdit(default_folder)
+        self.folder_le = QtWidgets.QLineEdit(self.scene_file.folder_path)
         self.folder_le.setMinimumHeight(30)
         self.folder_browse_btn = QtWidgets.QPushButton("Browse")
         self.folder_browse_btn.setMinimumHeight(30)
@@ -100,18 +99,13 @@ class SmartSaveUI(QtWidgets.QDialog):
         return layout
 
     def _create_filename_ui(self):
-        """Lays out widgets for filename according to convention
-
-        Return:
-            QGridLayout: A layout containing the widgets
-        """
         self.desc_le = QtWidgets.QLineEdit(self.current_ui_desc)
-        self.desc_le.setMaxLength(20)
+        self.desc_le.setMaxLength(50)
         self.desc_le.setMinimumWidth(100)
         self.desc_le.setMinimumHeight(30)
 
         self.task_le = QtWidgets.QLineEdit(self.current_ui_task)
-        self.task_le.setMaxLength(10)
+        self.task_le.setMaxLength(20)
         self.task_le.setFixedWidth(100)
         self.task_le.setMinimumHeight(30)
 
@@ -120,21 +114,20 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.ver_sbx = QtWidgets.QSpinBox()
         self.ver_sbx.setValue(self.current_ui_ver)
         self.ver_sbx.setButtonSymbols(QtWidgets.QAbstractSpinBox.PlusMinus)
+        self.ver_sbx.setRange(1, 99)
         self.ver_sbx.setFixedWidth(50)
         self.ver_sbx.setMinimumHeight(30)
 
         layout = self._create_filename_headers()
-        layout.addWidget(self.task_le, 1, 2)
-        layout.addWidget(self.ver_sbx, 1, 4)
         layout.addWidget(self.desc_le, 1, 0)
+        layout.addWidget(QtWidgets.QLabel("_"), 1, 1)
+        layout.addWidget(self.task_le, 1, 2)
+        layout.addWidget(QtWidgets.QLabel("_v"), 1, 3)
+        layout.addWidget(self.ver_sbx, 1, 4)
+        layout.addWidget(QtWidgets.QLabel(self.scene_file.ext), 1, 6)
         return layout
 
     def _create_filename_headers(self):
-        """Lays out widgets for headers for each filename component
-
-        Return:
-            QGridLayout: A layout containing the widgets
-        """
         self.descriptor_lbl = QtWidgets.QLabel("Descriptor")
         self.descriptor_lbl.setStyleSheet("font-weight: bold")
         self.task_lbl = QtWidgets.QLabel("Task")
@@ -149,16 +142,10 @@ class SmartSaveUI(QtWidgets.QDialog):
         return layout
 
     def _create_buttons_ui(self):
-        """Lays out widgets for two save buttons based on SceneFile
-        save methods.
-
-        Return:
-            QHBoxLayout: A layout containing the widgets
-        """
         self.save_btn = QtWidgets.QPushButton()
         self.save_btn.setMinimumHeight(40)
         self.save_increment_btn = QtWidgets.QPushButton()
-        self.save_increment_btn.setStyleSheet(create_button_stylesheet())
+        self.save_increment_btn.setStyleSheet(gold_button_stylesheet())
         self.save_increment_btn.setMinimumHeight(40)
 
         layout = QtWidgets.QHBoxLayout()
@@ -167,7 +154,6 @@ class SmartSaveUI(QtWidgets.QDialog):
         return layout
 
     def _create_connections(self):
-        """Connects UI control signals to slots for active feedback"""
         self.folder_browse_btn.clicked.connect(self._open_browse_dialog)
         self.desc_le.textEdited.connect(self._update_descriptor_display)
         self.task_le.textEdited.connect(self._update_task_display)
@@ -177,8 +163,6 @@ class SmartSaveUI(QtWidgets.QDialog):
         self._update_filename_display()
 
     def _set_scene_properties_from_ui(self):
-        """Assigns the values of user input on the UI to the respective
-        values in the SceneFile instance"""
         self.scene_file.folder_path = self.folder_le.text()
         self.scene_file.descriptor = self.current_ui_desc
         self.scene_file.task = self.current_ui_task
@@ -201,17 +185,16 @@ class SmartSaveUI(QtWidgets.QDialog):
             QtWidgets.QFileDialog.DontResolveSymlinks)
         if folder:
             self.folder_le.setText(folder)
+            self._update_filename_display()
 
     @QtCore.Slot()
     def _save(self):
-        """Saves the scene with SceneFile method"""
         self._set_scene_properties_from_ui()
         self.scene_file.save()
         self._update_filename_display()
 
     @QtCore.Slot()
     def _save_increment(self):
-        """Saves an increment of the scene's version with SceneFile method"""
         self._set_scene_properties_from_ui()
         self.scene_file.save_increment()
         self.current_ui_ver = self.scene_file.ver
@@ -235,14 +218,14 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.current_ui_ver = self.ver_sbx.value()
         self._update_filename_display()
 
-    @QtCore.Slot()
     def _update_filename_display(self):
         if self.ver_sbx.value() is not self.current_ui_ver:
             self.ver_sbx.setValue(self.current_ui_ver)
         next_ver = self.scene_file.next_avail_ver(
-            search_desc=self.current_ui_desc, search_task=self.current_ui_task,
-            search_ext=self.scene_file.ext)
-
+            search_desc=self.current_ui_desc,
+            search_task=self.current_ui_task,
+            search_ext=self.scene_file.ext,
+            search_path=Path(self.folder_le.text()))
         name_str = "{desc}_{task}".format(desc=self.current_ui_desc,
                                           task=self.current_ui_task)
         save_str = "_v{ver:03d}.ma".format(ver=self.current_ui_ver)
@@ -315,9 +298,9 @@ class SceneFile(object):
             return pmc.system.saveAs(self.path)
 
     def next_avail_ver(self, search_desc=None,
-                       search_task=None, search_ext=None):
-        """Returns the next available version number in the same folder
-        using provided descriptor, task, and ext to search for
+                       search_task=None, search_ext=None, search_path=None):
+        """Returns the next available version number using provided
+        descriptor, task, ext, and folder path to search for
         """
         if not search_desc:
             search_desc = self.descriptor
@@ -325,11 +308,13 @@ class SceneFile(object):
             search_task = self.task
         if not search_ext:
             search_ext = self.ext
+        if not search_path:
+            search_path = self.folder_path
         pattern = "{descriptor}_{task}_v*{ext}".format(descriptor=search_desc,
                                                        task=search_task,
                                                        ext=search_ext)
         matching_scene_files = []
-        for file_ in self.folder_path.files():
+        for file_ in search_path.files():
             if file_.name.fnmatch(pattern):
                 matching_scene_files.append(file_)
         if not matching_scene_files:
