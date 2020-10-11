@@ -22,15 +22,27 @@ def create_button_stylesheet():
     stylesheet = """
         QPushButton {
             font-weight: bold;
-            color: #000000;
+            color: #382600;
             border: 2px solid #FFCA1C;
             background-color: #EABF3C;
             border-radius: 1px;
         }
-        QPushButton:hover {
-            background-color: #FFD147;
-        }"""
+        QPushButton:hover { 
+            background-color: #FFD147; 
+        }
+        QPushButton:pressed { 
+            background-color: #684C00; 
+            border: none;
+        }
+        """
     return stylesheet
+
+
+def test_ui_value_length(test_object, zero_return, nonzero_return):
+    if test_object.__len__() is 0:
+        return zero_return
+    else:
+        return nonzero_return
 
 
 class SmartSaveUI(QtWidgets.QDialog):
@@ -43,15 +55,13 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.setWindowFlags(self.windowFlags() ^
                             QtCore.Qt.WindowContextHelpButtonHint)
         self.scene_file = SceneFile()
-        self.current_ui_desc = self.scene_file.descriptor
+        self.current_ui_desc = self.scene_file.desc
         self.current_ui_task = self.scene_file.task
         self.current_ui_ver = self.scene_file.ver
         self.create_ui()
-        self.create_connections()
-
+        self._create_connections()
 
     def create_ui(self):
-        # TODO need to find out a solution to prevent this warning
         self.title_lbl = QtWidgets.QLabel("Smart Save")
         self.title_lbl.setStyleSheet("font: 20px")
 
@@ -91,15 +101,17 @@ class SmartSaveUI(QtWidgets.QDialog):
         Returns:
             QGridLayout: A layout containing the widgets
         """
-        self.descriptor_le = QtWidgets.QLineEdit(self.current_ui_desc)
-        self.descriptor_le.setMaxLength(20)
-        self.descriptor_le.setMinimumWidth(100)
-        self.descriptor_le.setMinimumHeight(30)
+        self.desc_le = QtWidgets.QLineEdit(self.current_ui_desc)
+        self.desc_le.setMaxLength(20)
+        self.desc_le.setMinimumWidth(100)
+        self.desc_le.setMinimumHeight(30)
 
         self.task_le = QtWidgets.QLineEdit(self.current_ui_task)
         self.task_le.setMaxLength(10)
         self.task_le.setFixedWidth(100)
         self.task_le.setMinimumHeight(30)
+
+        self._set_ui_placeholder_text()
 
         self.ver_sbx = QtWidgets.QSpinBox()
         self.ver_sbx.setValue(self.current_ui_ver)
@@ -110,7 +122,7 @@ class SmartSaveUI(QtWidgets.QDialog):
         layout = self._create_filename_headers()
         layout.addWidget(self.task_le, 1, 2)
         layout.addWidget(self.ver_sbx, 1, 4)
-        layout.addWidget(self.descriptor_le, 1, 0)
+        layout.addWidget(self.desc_le, 1, 0)
         return layout
 
     def _create_filename_headers(self):
@@ -145,14 +157,28 @@ class SmartSaveUI(QtWidgets.QDialog):
         layout.addWidget(self.save_increment_btn)
         return layout
 
-    def create_connections(self):
+    def _create_connections(self):
         self.folder_browse_btn.clicked.connect(self._open_browse_dialog)
-        self.descriptor_le.textEdited.connect(self._update_descriptor_display)
+        self.desc_le.textEdited.connect(self._update_descriptor_display)
         self.task_le.textEdited.connect(self._update_task_display)
         self.ver_sbx.valueChanged.connect(self._update_ver_display)
         self.save_btn.clicked.connect(self._save)
         self.save_increment_btn.clicked.connect(self._save_increment)
         self._update_filename_display()
+
+    def _set_scene_properties_from_ui(self):
+        self.scene_file.folder_path = self.folder_le.text()
+        self.scene_file.desc = self.current_ui_desc
+        self.desc_le.setText(self.current_ui_desc)
+        self.scene_file.task = self.current_ui_task
+        self.task_le.setText(self.current_ui_task)
+        self.scene_file.ver = self.current_ui_ver
+        self.scene_file.ext = ".ma"
+        self._set_ui_placeholder_text()
+
+    def _set_ui_placeholder_text(self):
+        self.desc_le.setPlaceholderText(self.current_ui_desc)
+        self.task_le.setPlaceholderText(self.current_ui_task)
 
     @QtCore.Slot()
     def _open_browse_dialog(self):
@@ -178,27 +204,16 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.current_ui_ver = self.scene_file.ver
         self._update_filename_display()
 
-    def _set_scene_properties_from_ui(self):
-        self.scene_file.folder_path = self.folder_le.text()
-        self.scene_file.descriptor = self.current_ui_desc
-        self.scene_file.task = self.current_ui_task
-        self.scene_file.ver = self.current_ui_ver
-        self.scene_file.ext = ".ma"
-
     @QtCore.Slot()
     def _update_descriptor_display(self):
-        if self.descriptor_le.text().__len__() > 0:
-            self.current_ui_desc = self.descriptor_le.text()
-        else:
-            self.current_ui_desc = self.scene_file.descriptor
+        self.current_ui_desc = test_ui_value_length(
+            self.desc_le.text(), self.scene_file.desc, self.desc_le.text())
         self._update_filename_display()
 
     @QtCore.Slot()
     def _update_task_display(self):
-        if self.task_le.text().__len__() > 0:
-            self.current_ui_task = self.task_le.text()
-        else:
-            self.current_ui_task = self.scene_file.task
+        self.current_ui_task = test_ui_value_length(
+            self.task_le.text(), self.scene_file.task, self.task_le.text())
         self._update_filename_display()
 
     @QtCore.Slot()
@@ -211,9 +226,9 @@ class SmartSaveUI(QtWidgets.QDialog):
     def _update_filename_display(self):
         if self.ver_sbx.value() is not self.current_ui_ver:
             self.ver_sbx.setValue(self.current_ui_ver)
-        next_ver = self.scene_file.next_avail_ver(desc=self.current_ui_desc,
-                                                  task=self.current_ui_task,
-                                                  ext=self.scene_file.ext)
+        next_ver = self.scene_file.next_avail_ver(
+            search_desc=self.current_ui_desc, search_task=self.current_ui_task,
+            search_ext=self.scene_file.ext)
         name_str = "{desc}_{task}".format(desc=self.current_ui_desc,
                                           task=self.current_ui_task)
         save_str = "_v{ver:03d}.ma".format(ver=self.current_ui_ver)
@@ -228,7 +243,7 @@ class SceneFile(object):
     def __init__(self, path=None):
         self._folder_path = Path(cmds.workspace(query=True,
                                                 rootDirectory=True)) / "scenes"
-        self.descriptor = "main"
+        self.desc = "main"
         self.task = "model"
         self.ver = 1
         self.ext = ".ma"
@@ -251,7 +266,7 @@ class SceneFile(object):
     @property
     def filename(self):
         pattern = "{descriptor}_{task}_v{ver:03d}{ext}"
-        return pattern.format(descriptor=self.descriptor,
+        return pattern.format(descriptor=self.desc,
                               task=self.task,
                               ver=self.ver,
                               ext=self.ext)
@@ -265,7 +280,7 @@ class SceneFile(object):
         self._folder_path = path.parent
         try:
             property_list = re.findall(r"([^\W_v]+|\.[A-Za-z0-9]+)", path.name)
-            self.descriptor, self.task, ver, self.ext = property_list
+            self.desc, self.task, ver, self.ext = property_list
             self.ver = int(ver.lstrip("0"))
         except ValueError as error:
             log.warning("File does not match naming convention. "
@@ -284,17 +299,18 @@ class SceneFile(object):
             self.folder_path.makedirs_p()
             return pmc.system.saveAs(self.path)
 
-    def next_avail_ver(self, desc=None, task=None, ext=None):
+    def next_avail_ver(self, search_desc=None,
+                       search_task=None, search_ext=None):
         """Returns the next available version number in the same folder"""
-        if not desc:
-            desc = self.descriptor
-        if not task:
-            task = self.task
-        if not ext:
-            ext = self.ext
-        pattern = "{descriptor}_{task}_v*{ext}".format(descriptor=desc,
-                                                       task=task,
-                                                       ext=ext)
+        if not search_desc:
+            search_desc = self.desc
+        if not search_task:
+            search_task = self.task
+        if not search_ext:
+            search_ext = self.ext
+        pattern = "{descriptor}_{task}_v*{ext}".format(descriptor=search_desc,
+                                                       task=search_task,
+                                                       ext=search_ext)
         matching_scene_files = []
         for file_ in self.folder_path.files():
             if file_.name.fnmatch(pattern):
