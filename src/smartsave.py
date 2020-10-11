@@ -22,31 +22,34 @@ def create_button_stylesheet():
     stylesheet = """
         QPushButton {
             font-weight: bold;
-            color: #382600;
-            border: 2px solid #FFCA1C;
+            color: #191300;
+            border: 1px solid #FFCA1C;
             background-color: #EABF3C;
-            border-radius: 1px;
         }
         QPushButton:hover { 
             background-color: #FFD147; 
         }
         QPushButton:pressed { 
-            background-color: #684C00; 
+            background-color: #916D00; 
             border: none;
         }
         """
     return stylesheet
 
 
-def test_ui_value_length(test_object, zero_return, nonzero_return):
-    if test_object.__len__() is 0:
-        return zero_return
-    else:
-        return nonzero_return
+def _check_object_length(test_object, zero_return, nonzero_return):
+    try:
+        if test_object.__len__() is 0:
+            return zero_return
+        else:
+            return nonzero_return
+    except AttributeError as error:
+        log.warning("Object does not contain a __len__ attribute.")
 
 
 class SmartSaveUI(QtWidgets.QDialog):
-    """Docstring goes here"""
+    """This class draws a SmartSaveUI with active user feedback according
+    to a filename convention of [descriptor]_[task]_v[version].[ext]"""
     def __init__(self):
         super(SmartSaveUI, self).__init__(parent=maya_main_window())
         self.setWindowTitle("Smart Save")
@@ -55,16 +58,17 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.setWindowFlags(self.windowFlags() ^
                             QtCore.Qt.WindowContextHelpButtonHint)
         self.scene_file = SceneFile()
-        self.current_ui_desc = self.scene_file.desc
+        _check_object_length(self.scene_file, 1, 0)
+        self.current_ui_desc = self.scene_file.descriptor
         self.current_ui_task = self.scene_file.task
         self.current_ui_ver = self.scene_file.ver
         self.create_ui()
         self._create_connections()
 
     def create_ui(self):
+        """Creates the main UI window and assembles user controls"""
         self.title_lbl = QtWidgets.QLabel("Smart Save")
         self.title_lbl.setStyleSheet("font: 20px")
-
         self.folder_lay = self._create_folder_ui()
         self.filename_lay = self._create_filename_ui()
         self.button_lay = self._create_buttons_ui()
@@ -79,7 +83,7 @@ class SmartSaveUI(QtWidgets.QDialog):
     def _create_folder_ui(self):
         """Lays out widgets for filepath and browse button
 
-        Returns:
+        Return:
             QHBoxLayout: A layout containing the widgets
         """
         default_folder = Path(cmds.workspace(query=True, rootDirectory=True))
@@ -98,7 +102,7 @@ class SmartSaveUI(QtWidgets.QDialog):
     def _create_filename_ui(self):
         """Lays out widgets for filename according to convention
 
-        Returns:
+        Return:
             QGridLayout: A layout containing the widgets
         """
         self.desc_le = QtWidgets.QLineEdit(self.current_ui_desc)
@@ -128,8 +132,8 @@ class SmartSaveUI(QtWidgets.QDialog):
     def _create_filename_headers(self):
         """Lays out widgets for headers for each filename component
 
-           Returns:
-               QGridLayout: A layout containing the widgets
+        Return:
+            QGridLayout: A layout containing the widgets
         """
         self.descriptor_lbl = QtWidgets.QLabel("Descriptor")
         self.descriptor_lbl.setStyleSheet("font-weight: bold")
@@ -145,9 +149,14 @@ class SmartSaveUI(QtWidgets.QDialog):
         return layout
 
     def _create_buttons_ui(self):
+        """Lays out widgets for two save buttons based on SceneFile
+        save methods.
+
+        Return:
+            QHBoxLayout: A layout containing the widgets
+        """
         self.save_btn = QtWidgets.QPushButton()
         self.save_btn.setMinimumHeight(40)
-
         self.save_increment_btn = QtWidgets.QPushButton()
         self.save_increment_btn.setStyleSheet(create_button_stylesheet())
         self.save_increment_btn.setMinimumHeight(40)
@@ -158,6 +167,7 @@ class SmartSaveUI(QtWidgets.QDialog):
         return layout
 
     def _create_connections(self):
+        """Connects UI control signals to slots for active feedback"""
         self.folder_browse_btn.clicked.connect(self._open_browse_dialog)
         self.desc_le.textEdited.connect(self._update_descriptor_display)
         self.task_le.textEdited.connect(self._update_task_display)
@@ -167,13 +177,16 @@ class SmartSaveUI(QtWidgets.QDialog):
         self._update_filename_display()
 
     def _set_scene_properties_from_ui(self):
+        """Assigns the values of user input on the UI to the respective
+        values in the SceneFile instance"""
         self.scene_file.folder_path = self.folder_le.text()
-        self.scene_file.desc = self.current_ui_desc
-        self.desc_le.setText(self.current_ui_desc)
+        self.scene_file.descriptor = self.current_ui_desc
         self.scene_file.task = self.current_ui_task
-        self.task_le.setText(self.current_ui_task)
         self.scene_file.ver = self.current_ui_ver
         self.scene_file.ext = ".ma"
+
+        self.desc_le.setText(self.current_ui_desc)
+        self.task_le.setText(self.current_ui_task)
         self._set_ui_placeholder_text()
 
     def _set_ui_placeholder_text(self):
@@ -191,14 +204,14 @@ class SmartSaveUI(QtWidgets.QDialog):
 
     @QtCore.Slot()
     def _save(self):
-        """Saves the scene using SceneFile method"""
+        """Saves the scene with SceneFile method"""
         self._set_scene_properties_from_ui()
         self.scene_file.save()
         self._update_filename_display()
 
     @QtCore.Slot()
     def _save_increment(self):
-        """Save an increment of the scene's version"""
+        """Saves an increment of the scene's version with SceneFile method"""
         self._set_scene_properties_from_ui()
         self.scene_file.save_increment()
         self.current_ui_ver = self.scene_file.ver
@@ -206,13 +219,14 @@ class SmartSaveUI(QtWidgets.QDialog):
 
     @QtCore.Slot()
     def _update_descriptor_display(self):
-        self.current_ui_desc = test_ui_value_length(
-            self.desc_le.text(), self.scene_file.desc, self.desc_le.text())
+        self.current_ui_desc = _check_object_length(
+            self.desc_le.text(), self.scene_file.descriptor,
+            self.desc_le.text())
         self._update_filename_display()
 
     @QtCore.Slot()
     def _update_task_display(self):
-        self.current_ui_task = test_ui_value_length(
+        self.current_ui_task = _check_object_length(
             self.task_le.text(), self.scene_file.task, self.task_le.text())
         self._update_filename_display()
 
@@ -221,7 +235,6 @@ class SmartSaveUI(QtWidgets.QDialog):
         self.current_ui_ver = self.ver_sbx.value()
         self._update_filename_display()
 
-    # TODO this needs work
     @QtCore.Slot()
     def _update_filename_display(self):
         if self.ver_sbx.value() is not self.current_ui_ver:
@@ -229,11 +242,13 @@ class SmartSaveUI(QtWidgets.QDialog):
         next_ver = self.scene_file.next_avail_ver(
             search_desc=self.current_ui_desc, search_task=self.current_ui_task,
             search_ext=self.scene_file.ext)
+
         name_str = "{desc}_{task}".format(desc=self.current_ui_desc,
                                           task=self.current_ui_task)
         save_str = "_v{ver:03d}.ma".format(ver=self.current_ui_ver)
-        self.save_btn.setText("Save as: \n" + name_str + save_str)
         inc_str = "_v{ver:03d}.ma".format(ver=next_ver)
+
+        self.save_btn.setText("Save as: \n" + name_str + save_str)
         self.save_increment_btn.setText("Increment save as: \n"
                                         + name_str + inc_str)
 
@@ -243,7 +258,7 @@ class SceneFile(object):
     def __init__(self, path=None):
         self._folder_path = Path(cmds.workspace(query=True,
                                                 rootDirectory=True)) / "scenes"
-        self.desc = "main"
+        self.descriptor = "main"
         self.task = "model"
         self.ver = 1
         self.ext = ".ma"
@@ -266,7 +281,7 @@ class SceneFile(object):
     @property
     def filename(self):
         pattern = "{descriptor}_{task}_v{ver:03d}{ext}"
-        return pattern.format(descriptor=self.desc,
+        return pattern.format(descriptor=self.descriptor,
                               task=self.task,
                               ver=self.ver,
                               ext=self.ext)
@@ -280,7 +295,7 @@ class SceneFile(object):
         self._folder_path = path.parent
         try:
             property_list = re.findall(r"([^\W_v]+|\.[A-Za-z0-9]+)", path.name)
-            self.desc, self.task, ver, self.ext = property_list
+            self.descriptor, self.task, ver, self.ext = property_list
             self.ver = int(ver.lstrip("0"))
         except ValueError as error:
             log.warning("File does not match naming convention. "
@@ -289,7 +304,7 @@ class SceneFile(object):
     def save(self):
         """Saves the scene file.
 
-        Returns:
+        Return:
             Path: the path to the scene file if successful
         """
         try:
@@ -301,9 +316,11 @@ class SceneFile(object):
 
     def next_avail_ver(self, search_desc=None,
                        search_task=None, search_ext=None):
-        """Returns the next available version number in the same folder"""
+        """Returns the next available version number in the same folder
+        using provided descriptor, task, and ext to search for
+        """
         if not search_desc:
-            search_desc = self.desc
+            search_desc = self.descriptor
         if not search_task:
             search_task = self.task
         if not search_ext:
