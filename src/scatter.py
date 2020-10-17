@@ -1,4 +1,5 @@
 import logging
+import random
 
 from PySide2 import QtWidgets, QtCore
 from shiboken2 import wrapInstance
@@ -58,7 +59,7 @@ class ScatterTool(object):
                 "{}.vtx[:]".format(self.scatter_target), fl=True)
             self.scatter_vertices = vertices
 
-    def scatter(self, percent=1.0, rotation_offset=0.0):
+    def scatter(self, vertex_percent=1.0, rotation_offset=0.0):
         """Scatters the currently filled object across selected target
         vertices list
 
@@ -69,6 +70,11 @@ class ScatterTool(object):
             om.MGlobal.displayError("Missing target or scatter object")
             return
         scattered = []
+        if vertex_percent < 1:
+            sample = int(len(self.scatter_vertices) * vertex_percent)
+            self.scatter_vertices = random.sample(self.scatter_vertices,
+                                                  sample)
+        rotation_offset = rotation_offset * 180
         for vert in self.scatter_vertices:
             # TODO find out why instance returns as a tuple
             instance = cmds.instance(self.scatter_obj)
@@ -78,11 +84,19 @@ class ScatterTool(object):
             cmds.select(vert, r=True)
             vtx_normals = cmds.polyNormalPerVertex(query=True, xyz=True)
             avg_normal = self.average_normals(vtx_normals)
-            rotation_xyz = self.set_rotation_from_normal(avg_normal)
-            cmds.select(instance[0], r=True)
-            cmds.rotate(rotation_xyz[0], rotation_xyz[1], rotation_xyz[2],
-                        a=True)
+            # calculate rotation xyz from the computed normal
 
+            # transform the instance to that rotation value
+
+            # apply rotation offset
+            cmds.select(instance[0], r=True)
+            x_offset = random.uniform(-rotation_offset, rotation_offset)
+            print(x_offset)
+            y_offset = random.uniform(-rotation_offset, rotation_offset)
+            print(y_offset)
+            z_offset = random.uniform(-rotation_offset, rotation_offset)
+            print(z_offset)
+            cmds.rotate(x_offset, y_offset, z_offset, r=True)
         scattered_group = cmds.group(scattered, name="scattered_grp")
         return scattered_group
 
@@ -115,4 +129,5 @@ class ScatterTool(object):
         #        rotation_modifier = 180
         #    normal_xyz[counter] = normal_xyz[counter] * rotation_modifier
         #    rotation_list.append(normal_xyz[counter])
+
         return [0, 0, 0]
