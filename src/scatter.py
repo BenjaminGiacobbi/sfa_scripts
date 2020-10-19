@@ -6,6 +6,7 @@ from shiboken2 import wrapInstance
 import maya.OpenMayaUI as omui
 import maya.OpenMaya as om
 import maya.cmds as cmds
+import maya.mel as mel
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +21,13 @@ def maya_main_window():
     return wrapInstance(long(main_window), QtWidgets.QWidget)
 
 
+def cross(a, b):
+    c = [a[1] * b[2] - a[2] * b[1],
+         a[2] * b[0] - a[0] * b[2],
+         a[0] * b[1] - a[1] * b[0]]
+    return c
+
+
 class ScatterUI(QtWidgets.QDialog):
     """This class draws a scatter tool UI etc etc... write more here"""
     def __init__(self):
@@ -29,10 +37,14 @@ class ScatterUI(QtWidgets.QDialog):
 
 
 class ScatterTool(object):
-    def __init__(self):
+    def __init__(self, percent=1.0, rotation=0.0, scale=0.0):
         self.scatter_target = None
         self.scatter_vertices = None
         self.scatter_obj = None
+        # TODO these variables need better names
+        self.scatter_percent = percent
+        self.rotation_offset = rotation
+        self.scale_offset = scale
         selection = self.get_object_from_selection()
         if selection:
             self.current_sel = selection
@@ -48,57 +60,77 @@ class ScatterTool(object):
 
     def set_scatter_obj(self):
         self.scatter_obj = self.get_object_from_selection()
-        print("Object: " + self.scatter_obj)
 
     def set_scatter_target(self):
         """Retrieves vertices from selection and fills scatter_target"""
         self.scatter_target = self.get_object_from_selection()
-        print("Target: " + self.scatter_target)
         if self.scatter_target:
             vertices = cmds.ls(
                 "{}.vtx[:]".format(self.scatter_target), fl=True)
             self.scatter_vertices = vertices
 
-    def scatter(self, vertex_percent=1.0, rotation_offset=0.0):
-        """Scatters the currently filled object across selected target
-        vertices list
+    def scatter(self):
+        """Scatters the target object across vertices list
 
         Return:
             String: The group name of the scattered objects
         """
-        if not self.scatter_target or not self.scatter_vertices:
-            om.MGlobal.displayError("Missing target or scatter object")
-            return
         scattered = []
-        if vertex_percent < 1:
-            sample = int(len(self.scatter_vertices) * vertex_percent)
-            self.scatter_vertices = random.sample(self.scatter_vertices,
-                                                  sample)
-        rotation_offset = rotation_offset * 180
-        for vert in self.scatter_vertices:
-            # TODO find out why instance returns as a tuple
+        sampled_vertices = self.sample_scatter_points()
+        for vert in sampled_vertices:
             instance = cmds.instance(self.scatter_obj)
             pos = cmds.pointPosition(vert, world=True)
-            cmds.move(pos[0], pos[1], pos[2], instance, a=True)
-            scattered.append(instance[0])
+
+            # calculating the vertex normals
             cmds.select(vert, r=True)
             vtx_normals = cmds.polyNormalPerVertex(query=True, xyz=True)
             avg_normal = self.average_normals(vtx_normals)
-            # calculate rotation xyz from the computed normal
+            transform_matrix = self.get_matrix_from_normal(avg_normal, pos)
 
-            # transform the instance to that rotation value
-
-            # apply rotation offset
+            # applying transformations
             cmds.select(instance[0], r=True)
-            x_offset = random.uniform(-rotation_offset, rotation_offset)
-            print(x_offset)
-            y_offset = random.uniform(-rotation_offset, rotation_offset)
-            print(y_offset)
-            z_offset = random.uniform(-rotation_offset, rotation_offset)
-            print(z_offset)
-            cmds.rotate(x_offset, y_offset, z_offset, r=True)
+            cmds.move(pos[0], pos[1], pos[2], a=True)
+            cmds.xform(ws=True, matrix=transform_matrix)
+
+            # applying extra rotation
+            extra_rot = self.random_rotation_offset()
+            cmds.rotate(extra_rot[0], extra_rot[1], extra_rot[2], r=True)
+
+            # applying random scale
+            random_scale = self.random_scale(instance[0])
+            cmds.setAttr("{}.scale".format(instance[0]), random_scale[0],
+                         random_scale[1], random_scale[2])
+
+            # list to group
+            scattered.append(instance[0])
         scattered_group = cmds.group(scattered, name="scattered_grp")
         return scattered_group
+
+    def sample_scatter_points(self):
+        if self.scatter_percent < 1:
+            sample_size = int(len(self.scatter_vertices) * self.scatter_percent)
+            sampled = random.sample(self.scatter_vertices, sample_size)
+            return sampled
+        else:
+            return self.scatter_vertices
+
+    def random_rotation_offset(self):
+        rotation_xyz = [0.0, 0.0, 0.0]
+        if self.rotation_offset > 0:
+            rotation_range = self.rotation_offset * 180
+            for counter in range(len(rotation_xyz)):
+                offset = random.uniform(-rotation_range, rotation_range)
+                rotation_xyz[counter] = offset
+        return rotation_xyz
+
+    def random_scale(self, obj):
+        new_scale = [1.0, 1.0, 1.0]
+        if self.scale_offset > 0:
+            ran_scale = random.uniform(-self.scale_offset, self.scale_offset)
+            obj_scale = cmds.getAttr("{}.scale".format(obj))[0]
+            for counter in range(len(obj_scale)):
+                new_scale[counter] = new_scale[counter] * (1.0 + ran_scale)
+        return new_scale
 
     def average_normals(self, normal_list):
         """Calculates the average normal of a set of normal values given in
@@ -116,18 +148,30 @@ class ScatterTool(object):
             normal_xyz.append(dir_sum / dir_count)
         return normal_xyz
 
-    def set_rotation_from_normal(self, normal_xyz):
+    def get_matrix_from_normal(self, normal_xyz, position):
         """Converts averaged normal vectors to rotation eulers
 
         Return:
-            List: A list of rotation values x, y, and z"""
-        # rotation_list = []
-        # for counter in range(3):
-        #   if normal_xyz[counter] < 0:
-        #       rotation_modifier = -180
-        #    else:
-        #        rotation_modifier = 180
-        #    normal_xyz[counter] = normal_xyz[counter] * rotation_modifier
-        #    rotation_list.append(normal_xyz[counter])
+            List: A list representing a 16 item matrix
+        """
+        # TODO need to convert the normal to world space,
+        # will fix numerous problems
+        tangent_1 = cross(normal_xyz, [0, 1, 0])
+        tangent_2 = cross(normal_xyz, tangent_1)
+        matrix = [tangent_2[0], tangent_2[1], tangent_2[2], 0.0,
+                  normal_xyz[0], normal_xyz[1], normal_xyz[2], 0.0,
+                  tangent_1[0], tangent_1[1], tangent_1[2], 0.0,
+                  position[0], position[1], position[2], 1.0]
+        return matrix
 
-        return [0, 0, 0]
+    def world_normal_from_local(self, normal, vertex):
+        """Converts a normal vector to world space
+
+        Return:
+            List: a list representing a normal vector
+        """
+        parent_shape = cmds.listRelatives(vertex, parent=True)
+        parent_transform = cmds.listRelatives(parent_shape[0], parent=True)
+        matrix = cmds.xform(parent_transform[0], q=True, m=True, ws=True)
+
+
