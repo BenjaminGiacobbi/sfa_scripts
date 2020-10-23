@@ -38,7 +38,7 @@ class ScatterUI(QtWidgets.QDialog):
         self.setMaximumWidth(750)
         self.scatter_tool = ScatterTool()
         self._create_ui()
-        # self._create_connections()
+        self._create_connections()
 
     def _create_ui(self):
         self.obj_lbl = QtWidgets.QLabel("Scatter Objects")
@@ -64,9 +64,11 @@ class ScatterUI(QtWidgets.QDialog):
         self.obj_le.setMinimumWidth(200)
         self.obj_le.setMinimumHeight(30)
         self.obj_le.setPlaceholderText("Object to scatter")
+        self.obj_le.setEnabled(False)
         self.target_le = QtWidgets.QLineEdit()
         self.target_le.setMinimumWidth(200)
         self.target_le.setMinimumHeight(30)
+        self.target_le.setEnabled(False)
         self.target_le.setPlaceholderText("Object to target")
         self.obj_btn = QtWidgets.QPushButton("Get From Selection")
         self.target_btn = QtWidgets.QPushButton("Get From Selection")
@@ -78,8 +80,10 @@ class ScatterUI(QtWidgets.QDialog):
         return layout
 
     def _create_modifier_ui(self):
+        # TODO break this up, it's too big, maybe do each row
         self.rotation_sbx = QtWidgets.QSpinBox()
-        self.rotation_sbx.setValue(int(self.scatter_tool.rotation_offset * 100))
+        self.rotation_sbx.setValue(
+            int(self.scatter_tool.rotation_offset * 100))
         self.rotation_sbx.setSuffix("%")
         self.rotation_sbx.setMaximumWidth(50)
         self.scale_sbx = QtWidgets.QSpinBox()
@@ -90,13 +94,17 @@ class ScatterUI(QtWidgets.QDialog):
         self.sample_sbx.setValue(int(self.scatter_tool.scatter_percent * 100))
         self.sample_sbx.setSuffix("%")
         self.sample_sbx.setMaximumWidth(50)
+        self.orient_cbx = QtWidgets.QCheckBox()
+        self.orient_cbx.setChecked(True)
         layout = QtWidgets.QGridLayout()
         layout.addWidget(QtWidgets.QLabel("Rotation Offset Range"), 0, 0)
         layout.addWidget(self.rotation_sbx, 0, 2)
-        layout.addWidget(QtWidgets.QLabel("Scale Offset Label"), 0, 4)
+        layout.addWidget(QtWidgets.QLabel("Scale Offset Range"), 0, 4)
         layout.addWidget(self.scale_sbx, 0, 6)
         layout.addWidget(QtWidgets.QLabel("Vertex Percent to Scatter"), 1, 0)
         layout.addWidget(self.sample_sbx, 1, 2)
+        layout.addWidget(QtWidgets.QLabel("Orient to Normals"), 1, 4)
+        layout.addWidget(self.orient_cbx, 1, 6)
         return layout
 
     def _create_button_ui(self):
@@ -109,6 +117,41 @@ class ScatterUI(QtWidgets.QDialog):
         layout.addWidget(self.scatter_btn)
         return layout
 
+    def _create_connections(self):
+        self.obj_btn.clicked.connect(self._select_obj)
+        self.target_btn.clicked.connect(self._select_target)
+        self.scatter_btn.clicked.connect(self._scatter)
+
+    @QtCore.Slot()
+    def _select_obj(self):
+        self.scatter_tool.set_scatter_obj()
+        if self.scatter_tool.scatter_obj:
+            self.obj_le.setText(self.scatter_tool.scatter_obj)
+            print(self.scatter_tool.scatter_obj)
+        self._update_scatter_btn_state()
+
+    @QtCore.Slot()
+    def _select_target(self):
+        self.scatter_tool.set_scatter_target()
+        if self.scatter_tool.scatter_target:
+            self.target_le.setText(self.scatter_tool.scatter_target)
+            print(self.scatter_tool.scatter_target)
+        self._update_scatter_btn_state()
+
+    @QtCore.Slot()
+    def _scatter(self):
+        self.scatter_tool.scatter_percent = float(
+            self.sample_sbx.value()) / 100
+        self.scatter_tool.scale_offset = float(self.scale_sbx.value()) / 100
+        self.scatter_tool.rotation_offset = float(
+            self.rotation_sbx.value()) / 100
+        self.scatter_tool.orient = self.orient_cbx.isChecked()
+        self.scatter_tool.scatter()
+
+    def _update_scatter_btn_state(self):
+        if self.scatter_tool.scatter_obj and self.scatter_tool.scatter_target:
+            self.scatter_btn.setEnabled(True)
+
 
 class ScatterTool(object):
     def __init__(self):
@@ -118,26 +161,27 @@ class ScatterTool(object):
         self.scatter_percent = 1.0
         self.rotation_offset = 0.0
         self.scale_offset = 0.0
-        selection = self.get_object_from_selection()
+        self.orient = True
+        selection = self._get_object_from_selection()
         if selection:
             self.current_sel = selection
             self.scatter_obj = self.current_sel
 
     @staticmethod
-    def get_object_from_selection():
+    def _get_object_from_selection():
         """Retrieves object from selection to fill scatter_obj"""
         selection = cmds.ls(sl=True, transforms=True)
         if not selection or len(selection) > 1:
             om.MGlobal.displayError("Please select a polygon in Object Mode.")
-            return
+            return None
         return selection[0]
 
     def set_scatter_obj(self):
-        self.scatter_obj = self.get_object_from_selection()
+        self.scatter_obj = self._get_object_from_selection()
 
     def set_scatter_target(self):
         """Retrieves vertices from selection and fills scatter_target"""
-        self.scatter_target = self.get_object_from_selection()
+        self.scatter_target = self._get_object_from_selection()
         if self.scatter_target:
             vertices = cmds.ls(
                 "{}.vtx[:]".format(self.scatter_target), fl=True)
@@ -185,7 +229,8 @@ class ScatterTool(object):
     # TODO probably pull the check out of this because it's weird that it returns the property
     def sample_scatter_points(self):
         if self.scatter_percent < 1:
-            sample_size = int(len(self.scatter_vertices) * self.scatter_percent)
+            sample_size = int(
+                len(self.scatter_vertices) * self.scatter_percent)
             sampled = random.sample(self.scatter_vertices, sample_size)
             return sampled
         else:
@@ -204,7 +249,8 @@ class ScatterTool(object):
     def random_scale(self, obj):
         new_scale = [1.0, 1.0, 1.0]
         if self.scale_offset > 0:
-            ran_scale = random.uniform(-self.scale_offset, self.scale_offset)
+            ran_scale = random.uniform(-self.scale_offset,
+                                       self.scale_offset)
             obj_scale = cmds.getAttr("{}.scale".format(obj))[0]
             for counter in range(len(obj_scale)):
                 new_scale[counter] = new_scale[counter] * (1.0 + ran_scale)
