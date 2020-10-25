@@ -5,7 +5,6 @@ from PySide2 import QtWidgets, QtCore
 from shiboken2 import wrapInstance
 import maya.OpenMayaUI as omui
 import maya.OpenMaya as om
-import maya.api.OpenMaya as OpenMaya
 import maya.cmds as cmds
 import maya.mel as mel
 
@@ -82,12 +81,11 @@ class ScatterUI(QtWidgets.QDialog):
     def _create_modifier_ui(self):
         # TODO break this up, it's too big, maybe do each row
         self.rotation_sbx = QtWidgets.QSpinBox()
-        self.rotation_sbx.setValue(
-            int(self.scatter_tool.rotation_offset * 100))
+        self.rotation_sbx.setValue(int(self.scatter_tool.rot_offset * 100))
         self.rotation_sbx.setSuffix("%")
         self.rotation_sbx.setMaximumWidth(50)
         self.scale_sbx = QtWidgets.QSpinBox()
-        self.scale_sbx.setValue(int(self.scatter_tool.rotation_offset * 100))
+        self.scale_sbx.setValue(int(self.scatter_tool.rot_offset * 100))
         self.scale_sbx.setSuffix("%")
         self.scale_sbx.setMaximumWidth(50)
         self.sample_sbx = QtWidgets.QSpinBox()
@@ -127,7 +125,10 @@ class ScatterUI(QtWidgets.QDialog):
         self.scatter_tool.set_scatter_obj()
         if self.scatter_tool.scatter_obj:
             self.obj_le.setText(self.scatter_tool.scatter_obj)
-            print(self.scatter_tool.scatter_obj)
+        else:
+            om.MGlobal.displayWarning("Couldn't find object to scatter. "
+                                      "Select one object and press "
+                                      "\"Get From Selection\"")
         self._update_scatter_btn_state()
 
     @QtCore.Slot()
@@ -135,22 +136,25 @@ class ScatterUI(QtWidgets.QDialog):
         self.scatter_tool.set_scatter_target()
         if self.scatter_tool.scatter_target:
             self.target_le.setText(self.scatter_tool.scatter_target)
-            print(self.scatter_tool.scatter_target)
+        else:
+            om.MGlobal.displayWarning("Couldn't find target object. Select "
+                                      "one object and press \"Get From "
+                                      "Selection\"")
         self._update_scatter_btn_state()
 
     @QtCore.Slot()
     def _scatter(self):
-        self.scatter_tool.scatter_percent = float(
-            self.sample_sbx.value()) / 100
+        self.scatter_tool.scatter_percent = float(self.sample_sbx.value()) / 100
         self.scatter_tool.scale_offset = float(self.scale_sbx.value()) / 100
-        self.scatter_tool.rotation_offset = float(
-            self.rotation_sbx.value()) / 100
-        self.scatter_tool.orient = self.orient_cbx.isChecked()
+        self.scatter_tool.rot_offset = float(self.rotation_sbx.value()) / 100
+        self.scatter_tool.align = self.orient_cbx.isChecked()
         self.scatter_tool.scatter()
 
     def _update_scatter_btn_state(self):
         if self.scatter_tool.scatter_obj and self.scatter_tool.scatter_target:
             self.scatter_btn.setEnabled(True)
+        else:
+            self.scatter_btn.setEnabled(False)
 
 
 class ScatterTool(object):
@@ -159,22 +163,18 @@ class ScatterTool(object):
         self.scatter_vertices = None
         self.scatter_obj = None
         self.scatter_percent = 1.0
-        self.rotation_offset = 0.0
+        self.rot_offset = 0.0
         self.scale_offset = 0.0
-        self.orient = True
-        selection = self._get_object_from_selection()
-        if selection:
-            self.current_sel = selection
-            self.scatter_obj = self.current_sel
+        self.align = True
 
     @staticmethod
     def _get_object_from_selection():
         """Retrieves object from selection to fill scatter_obj"""
         selection = cmds.ls(sl=True, transforms=True)
-        if not selection or len(selection) > 1:
-            om.MGlobal.displayError("Please select a polygon in Object Mode.")
+        if selection:
+            return selection[0]
+        else:
             return None
-        return selection[0]
 
     def set_scatter_obj(self):
         self.scatter_obj = self._get_object_from_selection()
@@ -193,67 +193,72 @@ class ScatterTool(object):
         Return:
             String: The group name of the scattered objects
         """
-        # TODO break this up, this function is too big
         scattered = []
-        sampled_vertices = self.sample_scatter_points()
-        for vert in sampled_vertices:
+        if self.scatter_percent < 1.0:
+            self.scatter_vertices = self.sample_vertices()
+        for vert in self.scatter_vertices:
             instance = cmds.instance(self.scatter_obj)
             pos = cmds.pointPosition(vert, world=True)
-
-            # calculating the vertex normals
-            cmds.select(vert, r=True)
-            vtx_normals = cmds.polyNormalPerVertex(query=True, xyz=True)
-            avg_normal = self.average_normals(vtx_normals)
-            world_normal = self.world_normal_from_local(avg_normal, vert)
-            transform_matrix = self.get_matrix_from_normal(world_normal, pos)
-
-            # applying transformations
-            cmds.select(instance[0], r=True)
-            cmds.move(pos[0], pos[1], pos[2], a=True)
-            cmds.xform(matrix=transform_matrix)
-
-            # applying extra rotation
-            extra_rot = self.random_rotation_offset()
-            cmds.rotate(extra_rot[0], extra_rot[1], extra_rot[2], r=True)
-
-            # applying random scale
-            random_scale = self.random_scale(instance[0])
-            cmds.setAttr("{}.scale".format(instance[0]), random_scale[0],
-                         random_scale[1], random_scale[2])
-
-            # list to group
+            self.apply_transforms(instance[0], vert, pos)
             scattered.append(instance[0])
         scattered_group = cmds.group(scattered, name="scattered_grp")
         return scattered_group
 
-    # TODO probably pull the check out of this because it's weird that it returns the property
-    def sample_scatter_points(self):
-        if self.scatter_percent < 1:
-            sample_size = int(
-                len(self.scatter_vertices) * self.scatter_percent)
-            sampled = random.sample(self.scatter_vertices, sample_size)
-            return sampled
-        else:
-            return self.scatter_vertices
+    def sample_vertices(self):
+        """Samples the vertices stored by the instance
 
-    # TODO maybe pull the check out of this one as well
-    def random_rotation_offset(self):
-        rotation_xyz = [0.0, 0.0, 0.0]
-        if self.rotation_offset > 0:
-            rotation_range = self.rotation_offset * 180
-            for counter in range(len(rotation_xyz)):
-                offset = random.uniform(-rotation_range, rotation_range)
-                rotation_xyz[counter] = offset
-        return rotation_xyz
+        Return:
+            List: a list of strings representing Maya vertex nodes
+        """
+        sample_size = int(len(self.scatter_vertices) * self.scatter_percent)
+        sampled = random.sample(self.scatter_vertices, sample_size)
+        return sampled
 
-    def random_scale(self, obj):
+    def apply_transforms(self, instance, vertex, vert_pos):
+        """Tests modifier conditions and applies transformations to the
+        instanced object"""
+        cmds.select(instance, r=True)
+        cmds.move(vert_pos[0], vert_pos[1], vert_pos[2], a=True)
+        if self.align is True:
+            matrix = self.align_to_normals(vertex, vert_pos)
+            cmds.select(instance, r=True)
+            cmds.xform(ws=True, m=matrix)
+        scale = cmds.getAttr("{}.scale".format(self.scatter_obj))[0]
+        if self.scale_offset > 0.0:
+            scale = self.random_scale(scale)
+        cmds.setAttr("{}.scale".format(instance), scale[0], scale[1], scale[2])
+        if self.rot_offset > 0.0:
+            extra_rot = self.random_marginal_rotation()
+            cmds.rotate(extra_rot[0], extra_rot[1], extra_rot[2], r=True)
+
+    def align_to_normals(self, vertex, position):
+        """Angles an object based on the position and normals of a vertex"""
+        cmds.select(vertex, r=True)
+        vtx_normals = cmds.polyNormalPerVertex(q=True, xyz=True)
+        avg_normal = self.average_normals(vtx_normals)
+        avg_normal = om.MVector(
+            avg_normal[0], avg_normal[1], avg_normal[2]).normal()
+        parent_shape = cmds.listRelatives(vertex, parent=True)[0]
+        parent_transform = cmds.listRelatives(parent_shape, parent=True)[0]
+        parent_matrix = cmds.xform(parent_transform, q=True, m=True, ws=True)
+        world_normal = self.world_normal_from_local(avg_normal, parent_matrix)
+        transform_matrix = self.get_matrix_from_normal(
+            world_normal, position, parent_matrix)
+        return transform_matrix
+
+    def random_marginal_rotation(self):
+        extra_rot = [0.0, 0.0, 0.0]
+        rotation_range = self.rot_offset * 180
+        for counter in range(len(extra_rot)):
+            offset = random.uniform(-rotation_range, rotation_range)
+            extra_rot[counter] = offset
+        return extra_rot
+
+    def random_scale(self, current_scale):
         new_scale = [1.0, 1.0, 1.0]
-        if self.scale_offset > 0:
-            ran_scale = random.uniform(-self.scale_offset,
-                                       self.scale_offset)
-            obj_scale = cmds.getAttr("{}.scale".format(obj))[0]
-            for counter in range(len(obj_scale)):
-                new_scale[counter] = new_scale[counter] * (1.0 + ran_scale)
+        ran_scale = random.uniform(-self.scale_offset, self.scale_offset)
+        for counter in range(len(current_scale)):
+            new_scale[counter] = current_scale[counter] * (1.0 + ran_scale)
         return new_scale
 
     @staticmethod
@@ -273,15 +278,18 @@ class ScatterTool(object):
             normal_xyz.append(dir_sum / dir_count)
         return normal_xyz
 
-    def get_matrix_from_normal(self, normal_xyz, position):
+    @staticmethod
+    def get_matrix_from_normal(normal_xyz, position, parent_mat):
         """Converts averaged normal vectors to rotation eulers
 
         Return:
-            List: A list representing a 16 item matrix
+            List: A list representing a [4][4] matrix
         """
-        # TODO need to convert the normal to world space,
-        tangent_1 = cross(normal_xyz, [0, 1, 0])
+        local_y = parent_mat[4:7]
+        tangent_1 = cross(normal_xyz, local_y)
+        tangent_1 = om.MVector(tangent_1[0], tangent_1[1], tangent_1[2]).normal()
         tangent_2 = cross(normal_xyz, tangent_1)
+        tangent_2 = om.MVector(tangent_2[0], tangent_2[1], tangent_2[2]).normal()
         matrix = [tangent_2[0], tangent_2[1], tangent_2[2], 0.0,
                   normal_xyz[0], normal_xyz[1], normal_xyz[2], 0.0,
                   tangent_1[0], tangent_1[1], tangent_1[2], 0.0,
@@ -289,28 +297,23 @@ class ScatterTool(object):
         return matrix
 
     @staticmethod
-    def world_normal_from_local(normal, vertex):
+    def world_normal_from_local(normal, parent_mat):
         """Converts a normal vector to world space
 
         Return:
             List: a list representing a normal vector
         """
-        parent_shape = cmds.listRelatives(vertex, parent=True)
-        parent_transform = cmds.listRelatives(parent_shape[0], parent=True)
-        matrix = cmds.xform(parent_transform[0], q=True, m=True, ws=True)
         normal_str = "{0}, {1}, {2}".format(normal[0], normal[1], normal[2])
         mel_code_1 = "{" + normal_str + "}"
         matrix_str = "{0},{1},{2},{3},{4},{5},{6},{7}," \
                      "{8},{9},{10},{11},{12},{13},{14},{15}"
-        matrix_str = matrix_str.format(matrix[0], matrix[1], matrix[2],
-                                       matrix[3], matrix[4], matrix[5],
-                                       matrix[6], matrix[7], matrix[8],
-                                       matrix[9], matrix[10], matrix[11],
-                                       matrix[12], matrix[13], matrix[14],
-                                       matrix[15])
+        matrix_str = matrix_str.format(
+            parent_mat[0], parent_mat[1], parent_mat[2], parent_mat[3],
+            parent_mat[4], parent_mat[5], parent_mat[6], parent_mat[7],
+            parent_mat[8], parent_mat[9], parent_mat[10], parent_mat[11],
+            parent_mat[12], parent_mat[13], parent_mat[14], parent_mat[15])
         mel_code_2 = "{" + matrix_str + "}"
         evaluation = mel.eval("pointMatrixMult " + mel_code_1 + mel_code_2)
-        print(evaluation)
         return evaluation
         
 
