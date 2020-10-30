@@ -40,6 +40,19 @@ class ScatterUI(QtWidgets.QDialog):
         self._create_connections()
 
     def _create_ui(self):
+        self._create_sub_layouts()
+        self.main_lay = QtWidgets.QVBoxLayout()
+        self.main_lay.addLayout(self.obj_layout)
+        self.main_lay.addSpacerItem(QtWidgets.QSpacerItem(
+            150, 30, QtWidgets.QSizePolicy.Expanding))
+        self.main_lay.addLayout(self.mod_layout)
+        self.main_lay.addSpacerItem(QtWidgets.QSpacerItem(
+            150, 30, QtWidgets.QSizePolicy.Expanding))
+        self.main_lay.addStretch()
+        self.main_lay.addLayout(self.scatter_btn_layout)
+        self.setLayout(self.main_lay)
+
+    def _create_sub_layouts(self):
         self.obj_lbl = QtWidgets.QLabel("Scatter Objects")
         self.obj_lbl.setStyleSheet("font: 20px")
         self.obj_layout = QtWidgets.QVBoxLayout()
@@ -51,24 +64,13 @@ class ScatterUI(QtWidgets.QDialog):
         self.mod_layout.addWidget(self.mod_lbl)
         self.mod_layout.addLayout(self._create_modifier_ui())
         self.scatter_btn_layout = self._create_button_ui()
-        self.main_lay = QtWidgets.QVBoxLayout()
-        self.main_lay.addLayout(self.obj_layout)
-        self.main_lay.addStretch()
-        self.main_lay.addLayout(self.mod_layout)
-        self.main_lay.addLayout(self.scatter_btn_layout)
-        self.setLayout(self.main_lay)
 
     def _create_object_ui(self):
         self.obj_le = QtWidgets.QLineEdit()
-        self.obj_le.setMinimumWidth(200)
-        self.obj_le.setMinimumHeight(30)
         self.obj_le.setPlaceholderText("Object to scatter")
-        self.obj_le.setEnabled(False)
         self.target_le = QtWidgets.QLineEdit()
-        self.target_le.setMinimumWidth(200)
-        self.target_le.setMinimumHeight(30)
-        self.target_le.setEnabled(False)
         self.target_le.setPlaceholderText("Object to target")
+        self._set_read_only_fields([self.obj_le, self.target_le])
         self.obj_btn = QtWidgets.QPushButton("Get From Selection")
         self.target_btn = QtWidgets.QPushButton("Get From Selection")
         layout = QtWidgets.QGridLayout()
@@ -78,31 +80,113 @@ class ScatterUI(QtWidgets.QDialog):
         layout.addWidget(self.target_btn, 1, 2)
         return layout
 
+    @staticmethod
+    def _set_read_only_fields(le_list):
+        for le in le_list:
+            le.setMinimumWidth(200)
+            le.setMinimumHeight(30)
+            le.setEnabled(False)
+
     def _create_modifier_ui(self):
-        # TODO break this up, it's too big, maybe do each row
-        self.rotation_sbx = QtWidgets.QSpinBox()
-        self.rotation_sbx.setValue(int(self.scatter_tool.rot_offset * 100))
-        self.rotation_sbx.setSuffix("%")
-        self.rotation_sbx.setMaximumWidth(50)
-        self.scale_sbx = QtWidgets.QSpinBox()
-        self.scale_sbx.setValue(int(self.scatter_tool.rot_offset * 100))
-        self.scale_sbx.setSuffix("%")
-        self.scale_sbx.setMaximumWidth(50)
-        self.sample_sbx = QtWidgets.QSpinBox()
-        self.sample_sbx.setValue(int(self.scatter_tool.scatter_percent * 100))
-        self.sample_sbx.setSuffix("%")
-        self.sample_sbx.setMaximumWidth(50)
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(QtWidgets.QLabel("Random Rotation Range"))
+        layout.addLayout(self._create_rotation_controls())
+        layout.addSpacerItem(QtWidgets.QSpacerItem(
+            150, 30, QtWidgets.QSizePolicy.Expanding))
+        layout.addWidget(QtWidgets.QLabel("Random Scale Range"))
+        layout.addLayout(self._create_scale_layout())
+        layout.addSpacerItem(QtWidgets.QSpacerItem(
+            150, 30, QtWidgets.QSizePolicy.Expanding))
+        layout.addWidget(QtWidgets.QLabel("Miscellaneous"))
+        layout.addLayout(self._create_misc_modifiers())
+        return layout
+
+    def _create_rotation_controls(self):
+        self.x_min_lbl = QtWidgets.QLabel("X Min")
+        self.x_max_lbl = QtWidgets.QLabel("X Max")
+        self.y_min_lbl = QtWidgets.QLabel("Y Min")
+        self.y_max_lbl = QtWidgets.QLabel("Y Max")
+        self.z_min_lbl = QtWidgets.QLabel("Z Min")
+        self.z_max_lbl = QtWidgets.QLabel("Z Max")
+        self._align_widgets([self.x_min_lbl, self.x_max_lbl, self.y_min_lbl,
+                             self.y_max_lbl, self.z_min_lbl, self.z_max_lbl])
+        self.x_min_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, True)
+        self.x_max_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, False)
+        self.y_min_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, True)
+        self.y_max_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, False)
+        self.z_min_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, True)
+        self.z_max_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, False)
+        return self._assemble_rotation_layout()
+
+    def _assemble_rotation_layout(self):
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.x_min_lbl, 0, 1)
+        layout.addWidget(self.x_min_sbx, 0, 2)
+        layout.addWidget(self.x_max_lbl, 0, 4)
+        layout.addWidget(self.x_max_sbx, 0, 5)
+        layout.addWidget(self.y_min_lbl, 1, 1)
+        layout.addWidget(self.y_min_sbx, 1, 2)
+        layout.addWidget(self.y_max_lbl, 1, 4)
+        layout.addWidget(self.y_max_sbx, 1, 5)
+        layout.addWidget(self.z_min_lbl, 2, 1)
+        layout.addWidget(self.z_min_sbx, 2, 2)
+        layout.addWidget(self.z_max_lbl, 2, 4)
+        layout.addWidget(self.z_max_sbx, 2, 5)
+        return layout
+
+    def _create_scale_layout(self):
+        self.scale_min_lbl = QtWidgets.QLabel("Scale Min")
+        self.scale_max_lbl = QtWidgets.QLabel("Scale Max")
+        self._align_widgets([self.scale_min_lbl, self.scale_max_lbl])
+        self.scale_min_sbx = self._create_sbx("x", [0.0, 1.0], 0.01, False)
+        self.scale_min_sbx.setValue(1.0)
+        self.scale_max_sbx = self._create_sbx("x", [1.0, 5.0], 0.01, False)
+        self.scale_max_sbx.setValue(1.0)
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.scale_min_lbl, 0, 1)
+        layout.addWidget(self.scale_min_sbx, 0, 2)
+        layout.addWidget(self.scale_max_lbl, 0, 4)
+        layout.addWidget(self.scale_max_sbx, 0, 5)
+        return layout
+
+    @staticmethod
+    def _create_sbx(suffix, sbx_range, step, is_negative,):
+        if isinstance(step, int):
+            sbx = QtWidgets.QSpinBox()
+        else:
+            sbx = QtWidgets.QDoubleSpinBox()
+        sbx.setSuffix(suffix)
+        sbx.setRange(sbx_range[0], sbx_range[1])
+        if is_negative is True:
+            sbx.setPrefix("-")
+        sbx.setWrapping(True)
+        sbx.setSingleStep(step)
+        sbx.setMaximumWidth(80)
+        sbx.setMinimumHeight(30)
+        return sbx
+
+    @staticmethod
+    def _align_widgets(widget_list):
+        for widget in widget_list:
+            widget.setMinimumWidth(120)
+            widget.setMinimumHeight(30)
+            widget.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
+    def _create_misc_modifiers(self):
+        self.density_lbl = QtWidgets.QLabel("Scatter Density")
+        self.orient_lbl = QtWidgets.QLabel("Orient to Normals")
+        self._align_widgets([self.density_lbl, self.orient_lbl])
+        self.density_sbx = self._create_sbx("%", [1, 100], 1, False)
+        self.density_sbx.setValue(100)
         self.orient_cbx = QtWidgets.QCheckBox()
         self.orient_cbx.setChecked(True)
+        self.orient_cbx.setMaximumWidth(80)
+        self.orient_cbx.setMinimumHeight(30)
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(QtWidgets.QLabel("Rotation Offset Range"), 0, 0)
-        layout.addWidget(self.rotation_sbx, 0, 2)
-        layout.addWidget(QtWidgets.QLabel("Scale Offset Range"), 0, 4)
-        layout.addWidget(self.scale_sbx, 0, 6)
-        layout.addWidget(QtWidgets.QLabel("Vertex Percent to Scatter"), 1, 0)
-        layout.addWidget(self.sample_sbx, 1, 2)
-        layout.addWidget(QtWidgets.QLabel("Orient to Normals"), 1, 4)
-        layout.addWidget(self.orient_cbx, 1, 6)
+        layout.addWidget(self.density_lbl, 0, 1)
+        layout.addWidget(self.density_sbx, 0, 2)
+        layout.addWidget(self.orient_lbl, 0, 4)
+        layout.addWidget(self.orient_cbx, 0, 5)
         return layout
 
     def _create_button_ui(self):
@@ -144,9 +228,17 @@ class ScatterUI(QtWidgets.QDialog):
 
     @QtCore.Slot()
     def _scatter(self):
-        self.scatter_tool.scatter_percent = float(self.sample_sbx.value()) / 100
-        self.scatter_tool.scale_offset = float(self.scale_sbx.value()) / 100
-        self.scatter_tool.rot_offset = float(self.rotation_sbx.value()) / 100
+        """Retrieves UI values to populate instance variables, then scatters"""
+        self.scatter_tool.scatter_density = float(
+            self.density_sbx.value()) / 100
+        self.scatter_tool.scale_range = [self.scale_min_sbx.value(),
+                                         self.scale_max_sbx.value()]
+        self.scatter_tool.rot_range_x = [self.x_min_sbx.value(),
+                                         self.x_max_sbx.value()]
+        self.scatter_tool.rot_range_y = [self.y_min_sbx.value(),
+                                         self.y_max_sbx.value()]
+        self.scatter_tool.rot_range_z = [self.z_min_sbx.value(),
+                                         self.z_max_sbx.value()]
         self.scatter_tool.align = self.orient_cbx.isChecked()
         self.scatter_tool.scatter()
 
@@ -162,9 +254,11 @@ class ScatterTool(object):
         self.scatter_target = None
         self.scatter_vertices = None
         self.scatter_obj = None
-        self.scatter_percent = 1.0
-        self.rot_offset = 0.0
-        self.scale_offset = 0.0
+        self.scatter_density = 1.0
+        self.rot_range_x = [0.0, 0.0]
+        self.rot_range_y = [0.0, 0.0]
+        self.rot_range_z = [0.0, 0.0]
+        self.scale_range = [1.0, 1.0]
         self.align = True
 
     @staticmethod
@@ -194,7 +288,7 @@ class ScatterTool(object):
             String: The group name of the scattered objects
         """
         scattered = []
-        if self.scatter_percent < 1.0:
+        if self.scatter_density < 1.0:
             self.scatter_vertices = self.sample_vertices()
         for vert in self.scatter_vertices:
             instance = cmds.instance(self.scatter_obj)
@@ -210,7 +304,7 @@ class ScatterTool(object):
         Return:
             List: a list of strings representing Maya vertex nodes
         """
-        sample_size = int(len(self.scatter_vertices) * self.scatter_percent)
+        sample_size = int(len(self.scatter_vertices) * self.scatter_density)
         sampled = random.sample(self.scatter_vertices, sample_size)
         return sampled
 
@@ -224,12 +318,12 @@ class ScatterTool(object):
             cmds.select(instance, r=True)
             cmds.xform(ws=True, m=matrix)
         scale = cmds.getAttr("{}.scale".format(self.scatter_obj))[0]
-        if self.scale_offset > 0.0:
+        if self.scale_range[0] < 1.0 or self.scale_range[1] > 1.0:
             scale = self.random_scale(scale)
         cmds.setAttr("{}.scale".format(instance), scale[0], scale[1], scale[2])
-        if self.rot_offset > 0.0:
-            extra_rot = self.random_marginal_rotation()
-            cmds.rotate(extra_rot[0], extra_rot[1], extra_rot[2], r=True)
+        extra_rot = self.random_marginal_rotation()
+        cmds.rotate(extra_rot[0], extra_rot[1], extra_rot[2],
+                    instance, os=True, r=True)
 
     def align_to_normals(self, vertex, position):
         """Angles an object based on the position and normals of a vertex"""
@@ -247,18 +341,20 @@ class ScatterTool(object):
         return transform_matrix
 
     def random_marginal_rotation(self):
-        extra_rot = [0.0, 0.0, 0.0]
-        rotation_range = self.rot_offset * 180
-        for counter in range(len(extra_rot)):
-            offset = random.uniform(-rotation_range, rotation_range)
-            extra_rot[counter] = offset
+        offset_x = random.uniform(-self.rot_range_x[0], self.rot_range_x[1])
+        print(offset_x)
+        offset_y = random.uniform(-self.rot_range_y[0], self.rot_range_y[1])
+        print(offset_y)
+        offset_z = random.uniform(-self.rot_range_z[0], self.rot_range_z[1])
+        print(offset_z)
+        extra_rot = [offset_x, offset_y, offset_z]
         return extra_rot
 
     def random_scale(self, current_scale):
         new_scale = [1.0, 1.0, 1.0]
-        ran_scale = random.uniform(-self.scale_offset, self.scale_offset)
+        ran_scale = random.uniform(self.scale_range[0], self.scale_range[1])
         for counter in range(len(current_scale)):
-            new_scale[counter] = current_scale[counter] * (1.0 + ran_scale)
+            new_scale[counter] = current_scale[counter] * ran_scale
         return new_scale
 
     @staticmethod
@@ -287,9 +383,11 @@ class ScatterTool(object):
         """
         local_y = parent_mat[4:7]
         tangent_1 = cross(normal_xyz, local_y)
-        tangent_1 = om.MVector(tangent_1[0], tangent_1[1], tangent_1[2]).normal()
+        tangent_1 = om.MVector(
+            tangent_1[0], tangent_1[1], tangent_1[2]).normal()
         tangent_2 = cross(normal_xyz, tangent_1)
-        tangent_2 = om.MVector(tangent_2[0], tangent_2[1], tangent_2[2]).normal()
+        tangent_2 = om.MVector(
+            tangent_2[0], tangent_2[1], tangent_2[2]).normal()
         matrix = [tangent_2[0], tangent_2[1], tangent_2[2], 0.0,
                   normal_xyz[0], normal_xyz[1], normal_xyz[2], 0.0,
                   tangent_1[0], tangent_1[1], tangent_1[2], 0.0,
