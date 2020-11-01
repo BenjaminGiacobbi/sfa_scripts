@@ -54,13 +54,13 @@ class ScatterUI(QtWidgets.QDialog):
         self.setLayout(self.main_lay)
 
     def _create_sub_layouts(self):
-        self.obj_lbl = QtWidgets.QLabel("Scatter Objects")
-        self.obj_lbl.setStyleSheet("font: 20px")
+        self.obj_lbl = QtWidgets.QLabel("Main Objects")
+        self.obj_lbl.setStyleSheet("font: 24px")
         self.obj_layout = QtWidgets.QVBoxLayout()
         self.obj_layout.addWidget(self.obj_lbl)
         self.obj_layout.addLayout(self._create_object_ui())
         self.mod_lbl = QtWidgets.QLabel("Modifiers")
-        self.mod_lbl.setStyleSheet("font: 20px")
+        self.mod_lbl.setStyleSheet("font: 24px")
         self.mod_layout = QtWidgets.QVBoxLayout()
         self.mod_layout.addWidget(self.mod_lbl)
         self.mod_layout.addLayout(self._create_modifier_ui())
@@ -108,17 +108,17 @@ class ScatterUI(QtWidgets.QDialog):
         self.x_neg_lbl = QtWidgets.QLabel("Negative X")
         self.x_pos_lbl = QtWidgets.QLabel("Positive X")
         self.y_neg_lbl = QtWidgets.QLabel("Negative Y")
-        self.x_pos_lbl = QtWidgets.QLabel("Positive Y")
+        self.y_pos_lbl = QtWidgets.QLabel("Positive Y")
         self.z_neg_lbl = QtWidgets.QLabel("Negative Z")
         self.z_pos_lbl = QtWidgets.QLabel("Positive Z")
         self._align_widgets([self.x_neg_lbl, self.x_pos_lbl, self.y_neg_lbl,
-                             self.x_pos_lbl, self.z_neg_lbl, self.z_pos_lbl])
-        self.x_neg_sbx = self._create_sbx(" Deg", [0, 180], 1)
-        self.x_pos_sbx = self._create_sbx(" Deg", [0, 180], 1)
-        self.y_neg_sbx = self._create_sbx(" Deg", [0, 180], 1)
-        self.y_pos_sbx = self._create_sbx(" Deg", [0, 180], 1)
-        self.z_neg_sbx = self._create_sbx(" Deg", [0, 180], 1)
-        self.z_pos_sbx = self._create_sbx(" Deg", [0, 180], 1)
+                             self.y_pos_lbl, self.z_neg_lbl, self.z_pos_lbl])
+        self.x_neg_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
+        self.x_pos_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
+        self.y_neg_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
+        self.y_pos_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
+        self.z_neg_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
+        self.z_pos_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
         return self._assemble_rotation_layout()
 
     def _assemble_rotation_layout(self):
@@ -129,7 +129,7 @@ class ScatterUI(QtWidgets.QDialog):
         layout.addWidget(self.x_pos_sbx, 0, 5)
         layout.addWidget(self.y_neg_lbl, 1, 1)
         layout.addWidget(self.y_neg_sbx, 1, 2)
-        layout.addWidget(self.x_pos_lbl, 1, 4)
+        layout.addWidget(self.y_pos_lbl, 1, 4)
         layout.addWidget(self.y_pos_sbx, 1, 5)
         layout.addWidget(self.z_neg_lbl, 2, 1)
         layout.addWidget(self.z_neg_sbx, 2, 2)
@@ -141,9 +141,9 @@ class ScatterUI(QtWidgets.QDialog):
         self.scale_min_lbl = QtWidgets.QLabel("Minimum Scale")
         self.scale_max_lbl = QtWidgets.QLabel("Maximum Scale")
         self._align_widgets([self.scale_min_lbl, self.scale_max_lbl])
-        self.scale_min_sbx = self._create_sbx("x", [0.0, 1.0], 0.01)
+        self.scale_min_sbx = self._create_double_sbx("x", [0.0, 1.0], 0.01)
         self.scale_min_sbx.setValue(1.0)
-        self.scale_max_sbx = self._create_sbx("x", [1.0, 5.0], 0.01)
+        self.scale_max_sbx = self._create_double_sbx("x", [1.0, 5.0], 0.01)
         self.scale_max_sbx.setValue(1.0)
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.scale_min_lbl, 0, 1)
@@ -153,11 +153,8 @@ class ScatterUI(QtWidgets.QDialog):
         return layout
 
     @staticmethod
-    def _create_sbx(suffix, sbx_range, step):
-        if isinstance(step, int):
-            sbx = QtWidgets.QSpinBox()
-        else:
-            sbx = QtWidgets.QDoubleSpinBox()
+    def _create_double_sbx(suffix, sbx_range, step):
+        sbx = QtWidgets.QDoubleSpinBox()
         sbx.setSuffix(suffix)
         sbx.setRange(sbx_range[0], sbx_range[1])
         sbx.setWrapping(True)
@@ -177,7 +174,7 @@ class ScatterUI(QtWidgets.QDialog):
         self.density_lbl = QtWidgets.QLabel("Scatter Density")
         self.orient_lbl = QtWidgets.QLabel("Orient to Normals")
         self._align_widgets([self.density_lbl, self.orient_lbl])
-        self.density_sbx = self._create_sbx("%", [1, 100], 1)
+        self.density_sbx = self._create_double_sbx("%", [0.0, 100.0], 0.1)
         self.density_sbx.setValue(100)
         self.orient_cbx = QtWidgets.QCheckBox()
         self.orient_cbx.setChecked(True)
@@ -240,12 +237,15 @@ class ScatterUI(QtWidgets.QDialog):
         """Retrieves scatter modifiers from UI and then runs scatter."""
         if not cmds.objExists(self.scatter_tool.scatter_obj[0]):
             MGlobal.displayError("Specified scatter object does not exist.")
+            self.obj_le.clear()
+            self._update_scatter_btn_state()
             return
         for target in self.scatter_tool.scatter_targets:
             if not cmds.objExists(target):
-                MGlobal.displayError(
-                    "One or more of the scatter targets does not exist. "
-                    "Please reselect.")
+                MGlobal.displayError("One or more of the scatter targets does "
+                                     "not exist. Please reselect.")
+                self.target_le.clear()
+                self._update_scatter_btn_state()
                 return
         self._set_scatter_properties_from_ui()
         self.scatter_tool.scatter()
@@ -264,8 +264,7 @@ class ScatterUI(QtWidgets.QDialog):
         self.scatter_tool.align = self.orient_cbx.isChecked()
 
     def _update_scatter_btn_state(self):
-        if (self.scatter_tool.scatter_obj and
-                len(self.scatter_tool.scatter_targets) > 0):
+        if self.obj_le.text() and self.target_le.text():
             self.scatter_btn.setEnabled(True)
         else:
             self.scatter_btn.setEnabled(False)
@@ -374,7 +373,7 @@ class ScatterTool(object):
         """
         offset_x = random.uniform(self.rot_range_x[0], self.rot_range_x[1])
         offset_y = random.uniform(self.rot_range_y[0], self.rot_range_y[1])
-        offset_z = random.uniform(sself.rot_range_z[0], self.rot_range_z[1])
+        offset_z = random.uniform(self.rot_range_z[0], self.rot_range_z[1])
         return [offset_x, offset_y, offset_z]
 
     def _random_scale(self, current_scale):
