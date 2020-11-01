@@ -3,8 +3,8 @@ import random
 
 from PySide2 import QtWidgets, QtCore
 from shiboken2 import wrapInstance
-import maya.OpenMayaUI as omui
-import maya.OpenMaya as om
+from maya.OpenMayaUI import MQtUtil
+from maya.OpenMaya import MVector, MGlobal
 import maya.cmds as cmds
 import maya.mel as mel
 
@@ -12,12 +12,12 @@ log = logging.getLogger(__name__)
 
 
 def maya_main_window():
-    """Returns the open maya window
+    """Returns the open maya window.
 
     Return:
-        wrapInstance: the maya window as a WrapInstance object
+        wrapInstance: The maya window as a WrapInstance object.
     """
-    main_window = omui.MQtUtil.mainWindow()
+    main_window = MQtUtil.mainWindow()
     return wrapInstance(long(main_window), QtWidgets.QWidget)
 
 
@@ -29,11 +29,12 @@ def cross(a, b):
 
 
 class ScatterUI(QtWidgets.QDialog):
-    """This class draws a scatter tool UI etc etc... write more here"""
+    """Draws a scatter tool UI to interface with ScatterTool class."""
     def __init__(self):
         super(ScatterUI, self).__init__(parent=maya_main_window())
         self.setWindowTitle("Scatter Tool")
-        self.setWindowFlags(self.windowFlags())
+        self.setWindowFlags(
+            self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         self.setMaximumWidth(750)
         self.scatter_tool = ScatterTool()
         self._create_ui()
@@ -43,11 +44,11 @@ class ScatterUI(QtWidgets.QDialog):
         self._create_sub_layouts()
         self.main_lay = QtWidgets.QVBoxLayout()
         self.main_lay.addLayout(self.obj_layout)
-        self.main_lay.addSpacerItem(QtWidgets.QSpacerItem(
-            150, 30, QtWidgets.QSizePolicy.Expanding))
+        self.main_lay.addSpacerItem(
+            QtWidgets.QSpacerItem(150, 30, QtWidgets.QSizePolicy.Expanding))
         self.main_lay.addLayout(self.mod_layout)
-        self.main_lay.addSpacerItem(QtWidgets.QSpacerItem(
-            150, 30, QtWidgets.QSizePolicy.Expanding))
+        self.main_lay.addSpacerItem(
+            QtWidgets.QSpacerItem(150, 30, QtWidgets.QSizePolicy.Expanding))
         self.main_lay.addStretch()
         self.main_lay.addLayout(self.scatter_btn_layout)
         self.setLayout(self.main_lay)
@@ -71,8 +72,10 @@ class ScatterUI(QtWidgets.QDialog):
         self.target_le = QtWidgets.QLineEdit()
         self.target_le.setPlaceholderText("Object to target")
         self._set_read_only_fields([self.obj_le, self.target_le])
-        self.obj_btn = QtWidgets.QPushButton("Get From Selection")
-        self.target_btn = QtWidgets.QPushButton("Get From Selection")
+        self.obj_btn = QtWidgets.QPushButton(
+            "Get From Selection\n(Single-object only)")
+        self.target_btn = QtWidgets.QPushButton(
+            "Get From Selection\n(Supports multiple objects)")
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.obj_le, 0, 0)
         layout.addWidget(self.target_le, 0, 2)
@@ -85,62 +88,62 @@ class ScatterUI(QtWidgets.QDialog):
         for le in le_list:
             le.setMinimumWidth(200)
             le.setMinimumHeight(30)
-            le.setEnabled(False)
+            le.setReadOnly(True)
 
     def _create_modifier_ui(self):
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(QtWidgets.QLabel("Random Rotation Range"))
         layout.addLayout(self._create_rotation_controls())
-        layout.addSpacerItem(QtWidgets.QSpacerItem(
-            150, 30, QtWidgets.QSizePolicy.Expanding))
+        layout.addSpacerItem(
+            QtWidgets.QSpacerItem(150, 30, QtWidgets.QSizePolicy.Expanding))
         layout.addWidget(QtWidgets.QLabel("Random Scale Range"))
         layout.addLayout(self._create_scale_layout())
-        layout.addSpacerItem(QtWidgets.QSpacerItem(
-            150, 30, QtWidgets.QSizePolicy.Expanding))
+        layout.addSpacerItem(
+            QtWidgets.QSpacerItem(150, 30, QtWidgets.QSizePolicy.Expanding))
         layout.addWidget(QtWidgets.QLabel("Miscellaneous"))
         layout.addLayout(self._create_misc_modifiers())
         return layout
 
     def _create_rotation_controls(self):
-        self.x_min_lbl = QtWidgets.QLabel("X Min")
-        self.x_max_lbl = QtWidgets.QLabel("X Max")
-        self.y_min_lbl = QtWidgets.QLabel("Y Min")
-        self.y_max_lbl = QtWidgets.QLabel("Y Max")
-        self.z_min_lbl = QtWidgets.QLabel("Z Min")
-        self.z_max_lbl = QtWidgets.QLabel("Z Max")
-        self._align_widgets([self.x_min_lbl, self.x_max_lbl, self.y_min_lbl,
-                             self.y_max_lbl, self.z_min_lbl, self.z_max_lbl])
-        self.x_min_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, True)
-        self.x_max_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, False)
-        self.y_min_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, True)
-        self.y_max_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, False)
-        self.z_min_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, True)
-        self.z_max_sbx = self._create_sbx(" Deg", [0.0, 180.0], 1, False)
+        self.x_neg_lbl = QtWidgets.QLabel("Negative X")
+        self.x_pos_lbl = QtWidgets.QLabel("Positive X")
+        self.y_neg_lbl = QtWidgets.QLabel("Negative Y")
+        self.x_pos_lbl = QtWidgets.QLabel("Positive Y")
+        self.z_neg_lbl = QtWidgets.QLabel("Negative Z")
+        self.z_pos_lbl = QtWidgets.QLabel("Positive Z")
+        self._align_widgets([self.x_neg_lbl, self.x_pos_lbl, self.y_neg_lbl,
+                             self.x_pos_lbl, self.z_neg_lbl, self.z_pos_lbl])
+        self.x_neg_sbx = self._create_sbx(" Deg", [0, 180], 1)
+        self.x_pos_sbx = self._create_sbx(" Deg", [0, 180], 1)
+        self.y_neg_sbx = self._create_sbx(" Deg", [0, 180], 1)
+        self.y_pos_sbx = self._create_sbx(" Deg", [0, 180], 1)
+        self.z_neg_sbx = self._create_sbx(" Deg", [0, 180], 1)
+        self.z_pos_sbx = self._create_sbx(" Deg", [0, 180], 1)
         return self._assemble_rotation_layout()
 
     def _assemble_rotation_layout(self):
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.x_min_lbl, 0, 1)
-        layout.addWidget(self.x_min_sbx, 0, 2)
-        layout.addWidget(self.x_max_lbl, 0, 4)
-        layout.addWidget(self.x_max_sbx, 0, 5)
-        layout.addWidget(self.y_min_lbl, 1, 1)
-        layout.addWidget(self.y_min_sbx, 1, 2)
-        layout.addWidget(self.y_max_lbl, 1, 4)
-        layout.addWidget(self.y_max_sbx, 1, 5)
-        layout.addWidget(self.z_min_lbl, 2, 1)
-        layout.addWidget(self.z_min_sbx, 2, 2)
-        layout.addWidget(self.z_max_lbl, 2, 4)
-        layout.addWidget(self.z_max_sbx, 2, 5)
+        layout.addWidget(self.x_neg_lbl, 0, 1)
+        layout.addWidget(self.x_neg_sbx, 0, 2)
+        layout.addWidget(self.x_pos_lbl, 0, 4)
+        layout.addWidget(self.x_pos_sbx, 0, 5)
+        layout.addWidget(self.y_neg_lbl, 1, 1)
+        layout.addWidget(self.y_neg_sbx, 1, 2)
+        layout.addWidget(self.x_pos_lbl, 1, 4)
+        layout.addWidget(self.y_pos_sbx, 1, 5)
+        layout.addWidget(self.z_neg_lbl, 2, 1)
+        layout.addWidget(self.z_neg_sbx, 2, 2)
+        layout.addWidget(self.z_pos_lbl, 2, 4)
+        layout.addWidget(self.z_pos_sbx, 2, 5)
         return layout
 
     def _create_scale_layout(self):
-        self.scale_min_lbl = QtWidgets.QLabel("Scale Min")
-        self.scale_max_lbl = QtWidgets.QLabel("Scale Max")
+        self.scale_min_lbl = QtWidgets.QLabel("Minimum Scale")
+        self.scale_max_lbl = QtWidgets.QLabel("Maximum Scale")
         self._align_widgets([self.scale_min_lbl, self.scale_max_lbl])
-        self.scale_min_sbx = self._create_sbx("x", [0.0, 1.0], 0.01, False)
+        self.scale_min_sbx = self._create_sbx("x", [0.0, 1.0], 0.01)
         self.scale_min_sbx.setValue(1.0)
-        self.scale_max_sbx = self._create_sbx("x", [1.0, 5.0], 0.01, False)
+        self.scale_max_sbx = self._create_sbx("x", [1.0, 5.0], 0.01)
         self.scale_max_sbx.setValue(1.0)
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.scale_min_lbl, 0, 1)
@@ -150,15 +153,13 @@ class ScatterUI(QtWidgets.QDialog):
         return layout
 
     @staticmethod
-    def _create_sbx(suffix, sbx_range, step, is_negative,):
+    def _create_sbx(suffix, sbx_range, step):
         if isinstance(step, int):
             sbx = QtWidgets.QSpinBox()
         else:
             sbx = QtWidgets.QDoubleSpinBox()
         sbx.setSuffix(suffix)
         sbx.setRange(sbx_range[0], sbx_range[1])
-        if is_negative is True:
-            sbx.setPrefix("-")
         sbx.setWrapping(True)
         sbx.setSingleStep(step)
         sbx.setMaximumWidth(80)
@@ -176,7 +177,7 @@ class ScatterUI(QtWidgets.QDialog):
         self.density_lbl = QtWidgets.QLabel("Scatter Density")
         self.orient_lbl = QtWidgets.QLabel("Orient to Normals")
         self._align_widgets([self.density_lbl, self.orient_lbl])
-        self.density_sbx = self._create_sbx("%", [1, 100], 1, False)
+        self.density_sbx = self._create_sbx("%", [1, 100], 1)
         self.density_sbx.setValue(100)
         self.orient_cbx = QtWidgets.QCheckBox()
         self.orient_cbx.setChecked(True)
@@ -207,43 +208,64 @@ class ScatterUI(QtWidgets.QDialog):
     @QtCore.Slot()
     def _select_obj(self):
         self.scatter_tool.set_scatter_obj()
-        if self.scatter_tool.scatter_obj:
-            self.obj_le.setText(self.scatter_tool.scatter_obj)
+        if len(self.scatter_tool.scatter_obj) is 1:
+            self.obj_le.setText(self.scatter_tool.scatter_obj[0])
         else:
-            om.MGlobal.displayWarning("Couldn't find object to scatter. "
-                                      "Select one object and press "
-                                      "\"Get From Selection\"")
+            self.obj_le.clear()
+            MGlobal.displayError(
+                "Failed to get scatter object. Select one shape object in "
+                "Object Mode and press \"Get From Selection\"")
         self._update_scatter_btn_state()
 
     @QtCore.Slot()
     def _select_target(self):
         self.scatter_tool.set_scatter_target()
-        if self.scatter_tool.scatter_target:
-            self.target_le.setText(self.scatter_tool.scatter_target)
+        if len(self.scatter_tool.scatter_targets) > 0:
+            target_str = ""
+            targets = len(self.scatter_tool.scatter_targets)
+            for idx in range(targets):
+                target_str += self.scatter_tool.scatter_targets[idx]
+                if idx is not targets - 1:
+                    target_str += ", "
+            self.target_le.setText(target_str)
         else:
-            om.MGlobal.displayWarning("Couldn't find target object. Select "
-                                      "one object and press \"Get From "
-                                      "Selection\"")
+            self.target_le.clear()
+            MGlobal.displayError(
+                "Failed to get scatter targets. Select one or more shapes in "
+                "Object Mode and press \"Get From Selection\"")
         self._update_scatter_btn_state()
 
     @QtCore.Slot()
     def _scatter(self):
-        """Retrieves UI values to populate instance variables, then scatters"""
-        self.scatter_tool.scatter_density = float(
-            self.density_sbx.value()) / 100
-        self.scatter_tool.scale_range = [self.scale_min_sbx.value(),
-                                         self.scale_max_sbx.value()]
-        self.scatter_tool.rot_range_x = [self.x_min_sbx.value(),
-                                         self.x_max_sbx.value()]
-        self.scatter_tool.rot_range_y = [self.y_min_sbx.value(),
-                                         self.y_max_sbx.value()]
-        self.scatter_tool.rot_range_z = [self.z_min_sbx.value(),
-                                         self.z_max_sbx.value()]
-        self.scatter_tool.align = self.orient_cbx.isChecked()
+        """Retrieves scatter modifiers from UI and then runs scatter."""
+        if not cmds.objExists(self.scatter_tool.scatter_obj[0]):
+            MGlobal.displayError("Specified scatter object does not exist.")
+            return
+        for target in self.scatter_tool.scatter_targets:
+            if not cmds.objExists(target):
+                MGlobal.displayError(
+                    "One or more of the scatter targets does not exist. "
+                    "Please reselect.")
+                return
+        self._set_scatter_properties_from_ui()
         self.scatter_tool.scatter()
 
+    def _set_scatter_properties_from_ui(self):
+        scatter_density = float(self.density_sbx.value()) / 100
+        scale_range = [self.scale_min_sbx.value(), self.scale_max_sbx.value()]
+        rot_range_x = [-self.x_neg_sbx.value(), self.x_pos_sbx.value()]
+        rot_range_y = [-self.y_neg_sbx.value(), self.y_pos_sbx.value()]
+        rot_range_z = [-self.z_neg_sbx.value(), self.z_pos_sbx.value()]
+        self.scatter_tool.scatter_density = scatter_density
+        self.scatter_tool.scale_range = scale_range
+        self.scatter_tool.rot_range_x = rot_range_x
+        self.scatter_tool.rot_range_y = rot_range_y
+        self.scatter_tool.rot_range_z = rot_range_z
+        self.scatter_tool.align = self.orient_cbx.isChecked()
+
     def _update_scatter_btn_state(self):
-        if self.scatter_tool.scatter_obj and self.scatter_tool.scatter_target:
+        if (self.scatter_tool.scatter_obj and
+                len(self.scatter_tool.scatter_targets) > 0):
             self.scatter_btn.setEnabled(True)
         else:
             self.scatter_btn.setEnabled(False)
@@ -251,8 +273,8 @@ class ScatterUI(QtWidgets.QDialog):
 
 class ScatterTool(object):
     def __init__(self):
-        self.scatter_target = None
-        self.scatter_vertices = None
+        self.scatter_targets = []
+        self.scatter_vertices = []
         self.scatter_obj = None
         self.scatter_density = 1.0
         self.rot_range_x = [0.0, 0.0]
@@ -262,75 +284,79 @@ class ScatterTool(object):
         self.align = True
 
     @staticmethod
-    def _get_object_from_selection():
-        """Retrieves object from selection to fill scatter_obj"""
+    def get_object_from_selection():
         selection = cmds.ls(sl=True, transforms=True)
         if selection:
-            return selection[0]
+            return selection
         else:
-            return None
+            return []
 
     def set_scatter_obj(self):
-        self.scatter_obj = self._get_object_from_selection()
+        self.scatter_obj = self.get_object_from_selection()
 
     def set_scatter_target(self):
-        """Retrieves vertices from selection and fills scatter_target"""
-        self.scatter_target = self._get_object_from_selection()
-        if self.scatter_target:
-            vertices = cmds.ls(
-                "{}.vtx[:]".format(self.scatter_target), fl=True)
+        """Retrieves vertices from object after setting scatter target."""
+        self.scatter_targets = self.get_object_from_selection()
+        if len(self.scatter_targets) > 0:
+            vertices = []
+            for target in self.scatter_targets:
+                vertices += cmds.ls("{}.vtx[:]".format(target), fl=True)
             self.scatter_vertices = vertices
 
     def scatter(self):
-        """Scatters the target object across vertices list
+        """Scatters the target object across vertices list.
 
         Return:
-            String: The group name of the scattered objects
+            String: The group name of the scattered objects.
         """
         scattered = []
         if self.scatter_density < 1.0:
-            self.scatter_vertices = self.sample_vertices()
+            self.scatter_vertices = self._sample_vertices()
+        scale = cmds.getAttr("{}.scale".format(self.scatter_obj[0]))[0]
         for vert in self.scatter_vertices:
-            instance = cmds.instance(self.scatter_obj)
+            instance = cmds.instance(self.scatter_obj[0])
             pos = cmds.pointPosition(vert, world=True)
-            self.apply_transforms(instance[0], vert, pos)
+            self._apply_transforms(instance[0], vert, pos, scale)
             scattered.append(instance[0])
         scattered_group = cmds.group(scattered, name="scattered_grp")
         return scattered_group
 
-    def sample_vertices(self):
-        """Samples the vertices stored by the instance
+    def _sample_vertices(self):
+        """Samples a percentage of vertices stored by the instance.
 
         Return:
-            List: a list of strings representing Maya vertex nodes
+            List: A list of strings representing Maya vertex nodes.
         """
         sample_size = int(len(self.scatter_vertices) * self.scatter_density)
         sampled = random.sample(self.scatter_vertices, sample_size)
         return sampled
 
-    def apply_transforms(self, instance, vertex, vert_pos):
+    def _apply_transforms(self, instance, vertex, vert_pos, scale):
         """Tests modifier conditions and applies transformations to the
         instanced object"""
         cmds.select(instance, r=True)
         cmds.move(vert_pos[0], vert_pos[1], vert_pos[2], a=True)
         if self.align is True:
-            matrix = self.align_to_normals(vertex, vert_pos)
+            matrix = self._align_to_normals(vertex, vert_pos)
             cmds.select(instance, r=True)
             cmds.xform(ws=True, m=matrix)
-        scale = cmds.getAttr("{}.scale".format(self.scatter_obj))[0]
         if self.scale_range[0] < 1.0 or self.scale_range[1] > 1.0:
-            scale = self.random_scale(scale)
+            scale = self._random_scale(scale)
         cmds.setAttr("{}.scale".format(instance), scale[0], scale[1], scale[2])
-        extra_rot = self.random_marginal_rotation()
+        extra_rot = self._random_marginal_rotation()
         cmds.rotate(extra_rot[0], extra_rot[1], extra_rot[2],
                     instance, os=True, r=True)
 
-    def align_to_normals(self, vertex, position):
-        """Angles an object based on the position and normals of a vertex"""
+    def _align_to_normals(self, vertex, position):
+        """Angles an object based on the position and normals of a vertex.
+
+        Return:
+            List: A 16 item list representing a [4][4] transformation matrix.
+        """
         cmds.select(vertex, r=True)
         vtx_normals = cmds.polyNormalPerVertex(q=True, xyz=True)
         avg_normal = self.average_normals(vtx_normals)
-        avg_normal = om.MVector(
+        avg_normal = MVector(
             avg_normal[0], avg_normal[1], avg_normal[2]).normal()
         parent_shape = cmds.listRelatives(vertex, parent=True)[0]
         parent_transform = cmds.listRelatives(parent_shape, parent=True)[0]
@@ -340,17 +366,19 @@ class ScatterTool(object):
             world_normal, position, parent_matrix)
         return transform_matrix
 
-    def random_marginal_rotation(self):
-        offset_x = random.uniform(-self.rot_range_x[0], self.rot_range_x[1])
-        print(offset_x)
-        offset_y = random.uniform(-self.rot_range_y[0], self.rot_range_y[1])
-        print(offset_y)
-        offset_z = random.uniform(-self.rot_range_z[0], self.rot_range_z[1])
-        print(offset_z)
-        extra_rot = [offset_x, offset_y, offset_z]
-        return extra_rot
+    def _random_marginal_rotation(self):
+        """Generates random rotation to apply on three axes.
 
-    def random_scale(self, current_scale):
+        Return:
+            List: A 3 item list representing xyz rotation values in degrees.
+        """
+        offset_x = random.uniform(self.rot_range_x[0], self.rot_range_x[1])
+        offset_y = random.uniform(self.rot_range_y[0], self.rot_range_y[1])
+        offset_z = random.uniform(sself.rot_range_z[0], self.rot_range_z[1])
+        return [offset_x, offset_y, offset_z]
+
+    def _random_scale(self, current_scale):
+        """Generates a random sc"""
         new_scale = [1.0, 1.0, 1.0]
         ran_scale = random.uniform(self.scale_range[0], self.scale_range[1])
         for counter in range(len(current_scale)):
@@ -370,7 +398,7 @@ class ScatterTool(object):
             dir_count = len(normal_list) // 3
             for inner_count in range(dir_count):
                 coord_iterator = outer_count + (3 * inner_count)
-                dir_sum = dir_sum + normal_list[coord_iterator]
+                dir_sum += normal_list[coord_iterator]
             normal_xyz.append(dir_sum / dir_count)
         return normal_xyz
 
@@ -383,11 +411,9 @@ class ScatterTool(object):
         """
         local_y = parent_mat[4:7]
         tangent_1 = cross(normal_xyz, local_y)
-        tangent_1 = om.MVector(
-            tangent_1[0], tangent_1[1], tangent_1[2]).normal()
+        tangent_1 = MVector(tangent_1[0], tangent_1[1], tangent_1[2]).normal()
         tangent_2 = cross(normal_xyz, tangent_1)
-        tangent_2 = om.MVector(
-            tangent_2[0], tangent_2[1], tangent_2[2]).normal()
+        tangent_2 = MVector(tangent_2[0], tangent_2[1], tangent_2[2]).normal()
         matrix = [tangent_2[0], tangent_2[1], tangent_2[2], 0.0,
                   normal_xyz[0], normal_xyz[1], normal_xyz[2], 0.0,
                   tangent_1[0], tangent_1[1], tangent_1[2], 0.0,
@@ -403,8 +429,8 @@ class ScatterTool(object):
         """
         normal_str = "{0}, {1}, {2}".format(normal[0], normal[1], normal[2])
         mel_code_1 = "{" + normal_str + "}"
-        matrix_str = "{0},{1},{2},{3},{4},{5},{6},{7}," \
-                     "{8},{9},{10},{11},{12},{13},{14},{15}"
+        matrix_str = ("{0},{1},{2},{3},{4},{5},{6},{7},"
+                      "{8},{9},{10},{11},{12},{13},{14},{15}")
         matrix_str = matrix_str.format(
             parent_mat[0], parent_mat[1], parent_mat[2], parent_mat[3],
             parent_mat[4], parent_mat[5], parent_mat[6], parent_mat[7],
@@ -413,6 +439,3 @@ class ScatterTool(object):
         mel_code_2 = "{" + matrix_str + "}"
         evaluation = mel.eval("pointMatrixMult " + mel_code_1 + mel_code_2)
         return evaluation
-        
-
-
