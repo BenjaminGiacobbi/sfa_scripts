@@ -36,7 +36,7 @@ class ScatterUI(QtWidgets.QDialog):
         self.setWindowFlags(
             self.windowFlags() ^ QtCore.Qt.WindowContextHelpButtonHint)
         self.setMaximumWidth(750)
-        self.scatter_tool = ScatterTool()
+        self.scatter = ScatterTool()
         self._create_ui()
         self._create_connections()
 
@@ -204,9 +204,9 @@ class ScatterUI(QtWidgets.QDialog):
 
     @QtCore.Slot()
     def _select_obj(self):
-        self.scatter_tool.set_scatter_obj()
-        if len(self.scatter_tool.scatter_obj) is 1:
-            self.obj_le.setText(self.scatter_tool.scatter_obj[0])
+        self.scatter.set_scatter_obj()
+        if len(self.scatter.scatter_obj) is 1:
+            self.obj_le.setText(self.scatter.scatter_obj[0])
         else:
             self.obj_le.clear()
             MGlobal.displayError(
@@ -216,13 +216,13 @@ class ScatterUI(QtWidgets.QDialog):
 
     @QtCore.Slot()
     def _select_target(self):
-        self.scatter_tool.set_scatter_target()
-        if len(self.scatter_tool.scatter_targets) > 0:
+        self.scatter.set_scatter_targets()
+        full_targets = self.scatter.target_objs + self.scatter.target_verts
+        if len(full_targets) > 0:
             target_str = ""
-            targets = len(self.scatter_tool.scatter_targets)
-            for idx in range(targets):
-                target_str += self.scatter_tool.scatter_targets[idx]
-                if idx is not targets - 1:
+            for idx in range(len(full_targets)):
+                target_str += full_targets[idx]
+                if idx is not len(full_targets) - 1:
                     target_str += ", "
             self.target_le.setText(target_str)
         else:
@@ -235,12 +235,12 @@ class ScatterUI(QtWidgets.QDialog):
     @QtCore.Slot()
     def _scatter(self):
         """Retrieves scatter modifiers from UI and then runs scatter."""
-        if not cmds.objExists(self.scatter_tool.scatter_obj[0]):
+        if not cmds.objExists(self.scatter.scatter_obj[0]):
             MGlobal.displayError("Specified scatter object does not exist.")
             self.obj_le.clear()
             self._update_scatter_btn_state()
             return
-        for target in self.scatter_tool.scatter_targets:
+        for target in self.scatter.target_objs + self.scatter.target_verts:
             if not cmds.objExists(target):
                 MGlobal.displayError("One or more of the scatter targets does "
                                      "not exist. Please reselect.")
@@ -248,7 +248,7 @@ class ScatterUI(QtWidgets.QDialog):
                 self._update_scatter_btn_state()
                 return
         self._set_scatter_properties_from_ui()
-        self.scatter_tool.scatter()
+        self.scatter.scatter()
 
     def _set_scatter_properties_from_ui(self):
         scatter_density = float(self.density_sbx.value()) / 100
@@ -256,12 +256,12 @@ class ScatterUI(QtWidgets.QDialog):
         rot_range_x = [-self.x_neg_sbx.value(), self.x_pos_sbx.value()]
         rot_range_y = [-self.y_neg_sbx.value(), self.y_pos_sbx.value()]
         rot_range_z = [-self.z_neg_sbx.value(), self.z_pos_sbx.value()]
-        self.scatter_tool.scatter_density = scatter_density
-        self.scatter_tool.scale_range = scale_range
-        self.scatter_tool.rot_range_x = rot_range_x
-        self.scatter_tool.rot_range_y = rot_range_y
-        self.scatter_tool.rot_range_z = rot_range_z
-        self.scatter_tool.align = self.orient_cbx.isChecked()
+        self.scatter.scatter_density = scatter_density
+        self.scatter.scale_range = scale_range
+        self.scatter.rot_range_x = rot_range_x
+        self.scatter.rot_range_y = rot_range_y
+        self.scatter.rot_range_z = rot_range_z
+        self.scatter.align = self.orient_cbx.isChecked()
 
     def _update_scatter_btn_state(self):
         if self.obj_le.text() and self.target_le.text():
@@ -272,8 +272,8 @@ class ScatterUI(QtWidgets.QDialog):
 
 class ScatterTool(object):
     def __init__(self):
-        self.scatter_targets = []
-        self.scatter_vertices = []
+        self.target_objs = []
+        self.target_verts = []
         self.scatter_obj = None
         self.scatter_density = 1.0
         self.rot_range_x = [0.0, 0.0]
@@ -291,16 +291,23 @@ class ScatterTool(object):
             return []
 
     def set_scatter_obj(self):
-        self.scatter_obj = self.get_object_from_selection()
+        selection = cmds.ls(sl=True, transforms=True)
+        if selection:
+            self.scatter_obj = selection
+        else:
+            self.scatter_obj = []
 
-    def set_scatter_target(self):
+    def set_scatter_targets(self):
         """Retrieves vertices from object after setting scatter target."""
-        self.scatter_targets = self.get_object_from_selection()
-        if len(self.scatter_targets) > 0:
-            vertices = []
-            for target in self.scatter_targets:
-                vertices += cmds.ls("{}.vtx[:]".format(target), fl=True)
-            self.scatter_vertices = vertices
+        obj_targets = []
+        vert_targets = cmds.ls(orderedSelection=True, flatten=True)
+        cmds.filterExpand(vert_targets, selectionMask=31, expand=True)
+        for obj in vert_targets:
+            if "vtx[" not in obj:
+                obj_targets.append(obj)
+                vert_targets.remove(obj)
+        self.target_objs = obj_targets
+        self.target_verts = vert_targets
 
     def scatter(self):
         """Scatters the target object across vertices list.
@@ -308,11 +315,15 @@ class ScatterTool(object):
         Return:
             String: The group name of the scattered objects.
         """
+        combined_verts = self.target_verts
         scattered = []
+        if len(self.target_objs) > 0:
+            for obj in self.target_objs:
+                combined_verts += cmds.ls(obj + ".vtx[*]", flatten=True)
         if self.scatter_density < 1.0:
-            self.scatter_vertices = self._sample_vertices()
+            combined_verts = self._sample_vertices(combined_verts)
         scale = cmds.getAttr("{}.scale".format(self.scatter_obj[0]))[0]
-        for vert in self.scatter_vertices:
+        for vert in combined_verts:
             instance = cmds.instance(self.scatter_obj[0])
             pos = cmds.pointPosition(vert, world=True)
             self._apply_transforms(instance[0], vert, pos, scale)
@@ -320,14 +331,14 @@ class ScatterTool(object):
         scattered_group = cmds.group(scattered, name="scattered_grp")
         return scattered_group
 
-    def _sample_vertices(self):
+    def _sample_vertices(self, vert_list):
         """Samples a percentage of vertices stored by the instance.
 
         Return:
             List: A list of strings representing Maya vertex nodes.
         """
-        sample_size = int(len(self.scatter_vertices) * self.scatter_density)
-        sampled = random.sample(self.scatter_vertices, sample_size)
+        sample_size = int(len(vert_list) * self.scatter_density)
+        sampled = random.sample(vert_list, sample_size)
         return sampled
 
     def _apply_transforms(self, instance, vertex, vert_pos, scale):
