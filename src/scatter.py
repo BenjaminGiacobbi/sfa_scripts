@@ -105,12 +105,15 @@ class ScatterUI(QtWidgets.QDialog):
         return layout
 
     def _create_rotation_controls(self):
-        self.x_neg_lbl = QtWidgets.QLabel("Negative X")
-        self.x_pos_lbl = QtWidgets.QLabel("Positive X")
-        self.y_neg_lbl = QtWidgets.QLabel("Negative Y")
-        self.y_pos_lbl = QtWidgets.QLabel("Positive Y")
-        self.z_neg_lbl = QtWidgets.QLabel("Negative Z")
-        self.z_pos_lbl = QtWidgets.QLabel("Positive Z")
+        self.x_axis_lbl = QtWidgets.QLabel("X-Axis")
+        self.x_neg_lbl = QtWidgets.QLabel("Pos")
+        self.x_pos_lbl = QtWidgets.QLabel("Neg")
+        self.y_axis_lbl = QtWidgets.QLabel("Y-Axis")
+        self.y_neg_lbl = QtWidgets.QLabel("Pos")
+        self.y_pos_lbl = QtWidgets.QLabel("Neg")
+        self.z_axis_lbl = QtWidgets.QLabel("Z-Axis")
+        self.z_neg_lbl = QtWidgets.QLabel("Pos")
+        self.z_pos_lbl = QtWidgets.QLabel("Neg")
         self._align_widgets([self.x_neg_lbl, self.x_pos_lbl, self.y_neg_lbl,
                              self.y_pos_lbl, self.z_neg_lbl, self.z_pos_lbl])
         self.x_neg_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
@@ -123,18 +126,21 @@ class ScatterUI(QtWidgets.QDialog):
 
     def _assemble_rotation_layout(self):
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.x_neg_lbl, 0, 1)
-        layout.addWidget(self.x_neg_sbx, 0, 2)
-        layout.addWidget(self.x_pos_lbl, 0, 4)
-        layout.addWidget(self.x_pos_sbx, 0, 5)
-        layout.addWidget(self.y_neg_lbl, 1, 1)
-        layout.addWidget(self.y_neg_sbx, 1, 2)
-        layout.addWidget(self.y_pos_lbl, 1, 4)
-        layout.addWidget(self.y_pos_sbx, 1, 5)
-        layout.addWidget(self.z_neg_lbl, 2, 1)
-        layout.addWidget(self.z_neg_sbx, 2, 2)
-        layout.addWidget(self.z_pos_lbl, 2, 4)
-        layout.addWidget(self.z_pos_sbx, 2, 5)
+        layout.addWidget(self.x_axis_lbl, 0, 2)
+        layout.addWidget(self.y_axis_lbl, 0, 5)
+        layout.addWidget(self.z_axis_lbl, 0, 8)
+        layout.addWidget(self.x_neg_lbl, 1, 1)
+        layout.addWidget(self.x_neg_sbx, 1, 2)
+        layout.addWidget(self.x_pos_lbl, 2, 1)
+        layout.addWidget(self.x_pos_sbx, 2, 2)
+        layout.addWidget(self.y_neg_lbl, 1, 4)
+        layout.addWidget(self.y_neg_sbx, 1, 5)
+        layout.addWidget(self.y_pos_lbl, 2, 4)
+        layout.addWidget(self.y_pos_sbx, 2, 5)
+        layout.addWidget(self.z_neg_lbl, 1, 7)
+        layout.addWidget(self.z_neg_sbx, 1, 8)
+        layout.addWidget(self.z_pos_lbl, 2, 7)
+        layout.addWidget(self.z_pos_sbx, 2, 8)
         return layout
 
     def _create_scale_layout(self):
@@ -166,7 +172,7 @@ class ScatterUI(QtWidgets.QDialog):
     @staticmethod
     def _align_widgets(widget_list):
         for widget in widget_list:
-            widget.setMinimumWidth(120)
+            widget.setMinimumWidth(60)
             widget.setMinimumHeight(30)
             widget.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
 
