@@ -79,6 +79,7 @@ class ScatterUI(QtWidgets.QDialog):
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.obj_le, 0, 0)
         layout.addWidget(self.target_le, 0, 2)
+        layout.addLayout(self._create_proportion_ui(), 2, 0)
         layout.addWidget(self.obj_btn, 1, 0)
         layout.addWidget(self.target_btn, 1, 2)
         return layout
@@ -89,6 +90,32 @@ class ScatterUI(QtWidgets.QDialog):
             le.setMinimumWidth(200)
             le.setMinimumHeight(30)
             le.setReadOnly(True)
+
+    def _create_proportion_ui(self):
+        self.obj_1_lbl = QtWidgets.QLabel("Object 1")
+        self.obj_2_lbl = QtWidgets.QLabel("Object 2")
+        self.obj_3_lbl = QtWidgets.QLabel("Object 3")
+        self.obj_1_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
+        self.obj_1_sbx.setMaximumWidth(80)
+        self.obj_1_sbx.setEnabled(False)
+        self.obj_1_value = self.obj_1_sbx.value()
+        self.obj_2_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
+        self.obj_2_sbx.setMaximumWidth(80)
+        self.obj_2_sbx.setEnabled(False)
+        self.obj_2_value = self.obj_2_sbx.value()
+        self.obj_3_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
+        self.obj_3_sbx.setMaximumWidth(80)
+        self.obj_3_sbx.setEnabled(False)
+        self.obj_3_value = self.obj_3_sbx.value()
+        self.obj_sbx_list = [self.obj_1_sbx, self.obj_2_sbx, self.obj_3_sbx]
+        layout = QtWidgets.QGridLayout()
+        layout.addWidget(self.obj_1_lbl, 0, 0)
+        layout.addWidget(self.obj_1_sbx, 0, 1)
+        layout.addWidget(self.obj_2_lbl, 1, 0)
+        layout.addWidget(self.obj_2_sbx, 1, 1)
+        layout.addWidget(self.obj_3_lbl, 2, 0)
+        layout.addWidget(self.obj_3_sbx, 2, 1)
+        return layout
 
     def _create_modifier_ui(self):
         layout = QtWidgets.QVBoxLayout()
@@ -207,19 +234,30 @@ class ScatterUI(QtWidgets.QDialog):
         self.obj_btn.clicked.connect(self._select_obj)
         self.target_btn.clicked.connect(self._select_target)
         self.scatter_btn.clicked.connect(self._scatter)
+        self.obj_1_sbx.editingFinished.connect(self._update_spinbox_1)
+        self.obj_2_sbx.editingFinished.connect(self._update_spinbox_2)
+        self.obj_3_sbx.editingFinished.connect(self._update_spinbox_3)
 
     @QtCore.Slot()
     def _select_obj(self):
         self.scatter.set_scatter_obj()
-        if len(self.scatter.scatter_obj) is 1:
-            self.obj_le.setText(self.scatter.scatter_obj[0])
+        if len(self.scatter.scatter_objs) > 0 and len(self.scatter.scatter_objs) < 4:
+            target_str = ""
+            for idx in range(len(self.scatter.scatter_objs)):
+                target_str += self.scatter.scatter_objs[idx]
+                if idx is not len(self.scatter.scatter_objs) - 1:
+                    target_str += ", "
+                self.obj_sbx_list[idx].setEnabled(True)
+            self.obj_le.setText(target_str)
+            self._update_proportion_controls()
         else:
             self.obj_le.clear()
             MGlobal.displayError(
-                "Failed to get scatter object. Select one shape object in "
+                "Failed to get scatter object. Select up to three objects in "
                 "Object Mode and press \"Get From Selection\"")
         self._update_scatter_btn_state()
 
+    # TODO this is kind of repetitive from the scatter object method
     @QtCore.Slot()
     def _select_target(self):
         self.scatter.set_scatter_targets()
@@ -241,7 +279,7 @@ class ScatterUI(QtWidgets.QDialog):
     @QtCore.Slot()
     def _scatter(self):
         """Retrieves scatter modifiers from UI and then runs scatter."""
-        if not cmds.objExists(self.scatter.scatter_obj[0]):
+        if not cmds.objExists(self.scatter.scatter_objs[0]):
             MGlobal.displayError("Specified scatter object does not exist.")
             self.obj_le.clear()
             self._update_scatter_btn_state()
@@ -256,6 +294,67 @@ class ScatterUI(QtWidgets.QDialog):
         self._set_scatter_properties_from_ui()
         self.scatter.scatter()
 
+    @QtCore.Slot()
+    def _update_spinbox_1(self):
+        self._update_spinboxes(self.obj_1_sbx, self.obj_1_value,
+                               self._find_remaining_spinboxes(self.obj_1_sbx))
+        self.obj_1_value = self.obj_1_sbx.value()
+
+    @QtCore.Slot()
+    def _update_spinbox_2(self):
+        self._update_spinboxes(self.obj_2_sbx, self.obj_2_value,
+                               self._find_remaining_spinboxes(self.obj_2_sbx))
+        self.obj_2_value = self.obj_2_sbx.value()
+
+    @QtCore.Slot()
+    def _update_spinbox_3(self):
+        self._update_spinboxes(self.obj_3_sbx, self.obj_3_value,
+                               self._find_remaining_spinboxes(self.obj_3_sbx))
+        self.obj_3_value = self.obj_3_sbx.value()
+
+    def _update_proportion_controls(self):
+        for count in range(len(self.obj_sbx_list)):
+            self.obj_sbx_list[count].setEnabled(False)
+            self.obj_sbx_list[count].setValue(0)
+        total = 0
+        for count in range(len(self.scatter.scatter_objs)):
+            self.obj_sbx_list[count].setEnabled(True)
+            if count is len(self.scatter.scatter_objs) - 1:
+                self.obj_sbx_list[count].setValue(100 - total)
+            else:
+                val = int(100 / len(self.scatter.scatter_objs))
+                self.obj_sbx_list[count].setValue(val)
+                total += val
+        self.obj_1_value = self.obj_1_sbx.value()
+        self.obj_2_value = self.obj_2_sbx.value()
+        self.obj_3_value = self.obj_3_sbx.value()
+
+    def _find_remaining_spinboxes(self, target_sbx):
+        active_sbxs = []
+        for sbx in self.obj_sbx_list:
+            if sbx.isEnabled() and sbx is not target_sbx:
+                active_sbxs.append(sbx)
+        return active_sbxs
+
+    # TODO the math here still isn't exact, need to get it closer
+    @staticmethod
+    def _update_spinboxes(changed_sbx, old_val, remain):
+        if changed_sbx.value() is not old_val:
+            remainder = 100 - changed_sbx.value()
+            old_remainder = 100 - old_val
+            if old_remainder is 0:
+                old_remainder = 0.01
+            count = changed_sbx.value()
+            for outer in range(len(remain)):
+                if outer is len(remain) - 1:
+                    remain[outer].setValue(100 - count)
+                else:
+                    proportion = float(remainder / old_remainder)
+                    new_val = int(remain[outer].value() * proportion)
+                    print(new_val)
+                    remain[outer].setValue(new_val)
+                    count += new_val
+
     def _set_scatter_properties_from_ui(self):
         scatter_density = float(self.density_sbx.value()) / 100
         scale_range = [self.scale_min_sbx.value(), self.scale_max_sbx.value()]
@@ -267,6 +366,9 @@ class ScatterUI(QtWidgets.QDialog):
         self.scatter.rot_range_x = rot_range_x
         self.scatter.rot_range_y = rot_range_y
         self.scatter.rot_range_z = rot_range_z
+        self.scatter.obj_proportions[0] = self.obj_1_sbx.value()
+        self.scatter.obj_proportions[1] = self.obj_2_sbx.value()
+        self.scatter.obj_proportions[2] = self.obj_3_sbx.value()
         self.scatter.align = self.orient_cbx.isChecked()
 
     def _update_scatter_btn_state(self):
@@ -280,28 +382,21 @@ class ScatterTool(object):
     def __init__(self):
         self.target_objs = []
         self.target_verts = []
-        self.scatter_obj = None
+        self.scatter_objs = []
         self.scatter_density = 1.0
         self.rot_range_x = [0.0, 0.0]
         self.rot_range_y = [0.0, 0.0]
         self.rot_range_z = [0.0, 0.0]
         self.scale_range = [1.0, 1.0]
+        self.obj_proportions = [0.0, 0.0, 0.0]
         self.align = True
-
-    @staticmethod
-    def get_object_from_selection():
-        selection = cmds.ls(sl=True, transforms=True)
-        if selection:
-            return selection
-        else:
-            return []
 
     def set_scatter_obj(self):
         selection = cmds.ls(sl=True, transforms=True)
         if selection:
-            self.scatter_obj = selection
+            self.scatter_objs = selection
         else:
-            self.scatter_obj = []
+            self.scatter_objs = []
 
     def set_scatter_targets(self):
         """Retrieves vertices from object after setting scatter target."""
@@ -315,6 +410,7 @@ class ScatterTool(object):
         self.target_objs = obj_targets
         self.target_verts = vert_targets
 
+    # TODO this is garbage holy hell
     def scatter(self):
         """Scatters the target object across vertices list.
 
@@ -328,14 +424,31 @@ class ScatterTool(object):
                 combined_verts += cmds.ls(obj + ".vtx[*]", flatten=True)
         if self.scatter_density < 1.0:
             combined_verts = self._sample_vertices(combined_verts)
-        scale = cmds.getAttr("{}.scale".format(self.scatter_obj[0]))[0]
-        for vert in combined_verts:
-            instance = cmds.instance(self.scatter_obj[0])
-            pos = cmds.pointPosition(vert, world=True)
-            self._apply_transforms(instance[0], vert, pos, scale)
+        proportions_list = []
+        if self.obj_proportions[0] is not 100:
+            for idx in range(len(self.obj_proportions)):
+                if self.obj_proportions[idx] is not 0:
+                    proportions_list.append((self.obj_proportions[idx] / 100) * len(combined_verts))
+            combined_verts = random.sample(combined_verts, len(combined_verts))
+        scale = cmds.getAttr("{}.scale".format(self.scatter_objs[0]))[0]
+        verts_idx = 0
+        instance_idx = 0
+        instances = 0
+        while verts_idx < len(combined_verts):
+            if instances > proportions_list[instance_idx]:
+                instance_idx += 1
+                instances = 0
+                scale = cmds.getAttr("{}.scale".format(
+                    self.scatter_objs[instance_idx]))[0]
+            instance = cmds.instance(self.scatter_objs[instance_idx])
+            pos = cmds.pointPosition(combined_verts[verts_idx], world=True)
+            self._apply_transforms(instance[0], combined_verts[verts_idx], pos, scale)
             scattered.append(instance[0])
+            instances += 1
+            verts_idx += 1
         scattered_group = cmds.group(scattered, name="scattered_grp")
         return scattered_group
+
 
     def _sample_vertices(self, vert_list):
         """Samples a percentage of vertices stored by the instance.
