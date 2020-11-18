@@ -182,9 +182,9 @@ class ScatterUI(QtWidgets.QDialog):
         self.scale_min_lbl = QtWidgets.QLabel("Minimum Scale")
         self.scale_max_lbl = QtWidgets.QLabel("Maximum Scale")
         self._align_widgets([self.scale_min_lbl, self.scale_max_lbl])
-        self.scale_min_sbx = self._create_double_sbx("x", [0.0, 1.0], 0.01)
+        self.scale_min_sbx = self._create_double_sbx("x", [0.0, 99], 0.01)
         self.scale_min_sbx.setValue(1.0)
-        self.scale_max_sbx = self._create_double_sbx("x", [1.0, 5.0], 0.01)
+        self.scale_max_sbx = self._create_double_sbx("x", [0.0, 99], 0.01)
         self.scale_max_sbx.setValue(1.0)
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.scale_min_lbl, 0, 1)
@@ -437,8 +437,7 @@ class ScatterTool(object):
         obj_counts = []
         if 100 not in self.obj_proportions:
             for idx in range(len(self.obj_proportions)):
-                count = math.ceil(
-                    self.obj_proportions[idx] / 100 * len(vertices))
+                count = int(self.obj_proportions[idx] / 100 * len(vertices))
                 obj_counts.append(count)
             vertices = random.sample(vertices, len(vertices))
         self._instance_scatter_objects(vertices, obj_counts)
@@ -446,18 +445,18 @@ class ScatterTool(object):
     def _instance_scatter_objects(self, verts, counts):
         scattered = []
         obj_idx = 0
-        print(counts)
-        print(range(len(verts)))
+        instance_no = 0
         scale = cmds.getAttr("{}.scale".format(self.scatter_objs[obj_idx]))[0]
-        for count in range(len(verts)):
-            if count >= counts[0]:
+        for vert in verts:
+            if instance_no >= counts[obj_idx] and obj_idx < 2:
                 obj_idx += 1
-                counts[0] = counts[obj_idx] + counts[0]
+                instance_no = 0
                 scale = cmds.getAttr(
                     "{}.scale".format(self.scatter_objs[obj_idx]))[0]
             instance = cmds.instance(self.scatter_objs[obj_idx])
-            self._apply_transforms(instance[0], verts[count], scale)
+            self._apply_transforms(instance[0], vert, scale)
             scattered.append(instance[0])
+            instance_no += 1
         return cmds.group(scattered, name="scattered_grp")
 
     def _sample_vertices(self, vert_list):
