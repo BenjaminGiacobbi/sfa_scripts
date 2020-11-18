@@ -7,6 +7,7 @@ from maya.OpenMayaUI import MQtUtil
 from maya.OpenMaya import MVector, MGlobal
 import maya.cmds as cmds
 import maya.mel as mel
+import math
 
 log = logging.getLogger(__name__)
 
@@ -54,32 +55,31 @@ class ScatterUI(QtWidgets.QDialog):
         self.setLayout(self.main_lay)
 
     def _create_sub_layouts(self):
-        self.obj_lbl = QtWidgets.QLabel("Main Objects")
-        self.obj_lbl.setStyleSheet("font: 24px")
+        self.obj_lay_lbl = QtWidgets.QLabel("Main Objects")
+        self.obj_lay_lbl.setStyleSheet("font: 24px")
         self.obj_layout = QtWidgets.QVBoxLayout()
-        self.obj_layout.addWidget(self.obj_lbl)
-        self.obj_layout.addLayout(self._create_object_ui())
-        self.mod_lbl = QtWidgets.QLabel("Modifiers")
-        self.mod_lbl.setStyleSheet("font: 24px")
+        self.obj_layout.addWidget(self.obj_lay_lbl)
+        self.obj_layout.addLayout(self._create_object_layout())
+        self.mod_lay_lbl = QtWidgets.QLabel("Modifiers")
+        self.mod_lay_lbl.setStyleSheet("font: 24px")
         self.mod_layout = QtWidgets.QVBoxLayout()
-        self.mod_layout.addWidget(self.mod_lbl)
-        self.mod_layout.addLayout(self._create_modifier_ui())
+        self.mod_layout.addWidget(self.mod_lay_lbl)
+        self.mod_layout.addLayout(self._create_modifier_layout())
         self.scatter_btn_layout = self._create_button_ui()
 
-    def _create_object_ui(self):
+    def _create_object_layout(self):
         self.obj_le = QtWidgets.QLineEdit()
-        self.obj_le.setPlaceholderText("Object to scatter")
+        self.obj_le.setPlaceholderText("Objects to scatter")
         self.target_le = QtWidgets.QLineEdit()
-        self.target_le.setPlaceholderText("Object to target")
+        self.target_le.setPlaceholderText("Objects to target")
         self._set_read_only_fields([self.obj_le, self.target_le])
         self.obj_btn = QtWidgets.QPushButton(
-            "Get From Selection\n(Single-object only)")
-        self.target_btn = QtWidgets.QPushButton(
-            "Get From Selection\n(Supports multiple objects)")
+            "Get From Selection\n(Up to three objects)")
+        self.target_btn = QtWidgets.QPushButton("Get From Selection")
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.obj_le, 0, 0)
         layout.addWidget(self.target_le, 0, 2)
-        layout.addLayout(self._create_proportion_ui(), 2, 0)
+        layout.addLayout(self._create_proportion_layout(), 2, 0)
         layout.addWidget(self.obj_btn, 1, 0)
         layout.addWidget(self.target_btn, 1, 2)
         return layout
@@ -91,23 +91,8 @@ class ScatterUI(QtWidgets.QDialog):
             le.setMinimumHeight(30)
             le.setReadOnly(True)
 
-    def _create_proportion_ui(self):
-        self.obj_1_lbl = QtWidgets.QLabel("Object 1")
-        self.obj_2_lbl = QtWidgets.QLabel("Object 2")
-        self.obj_3_lbl = QtWidgets.QLabel("Object 3")
-        self.obj_1_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
-        self.obj_1_sbx.setMaximumWidth(80)
-        self.obj_1_sbx.setEnabled(False)
-        self.obj_1_value = self.obj_1_sbx.value()
-        self.obj_2_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
-        self.obj_2_sbx.setMaximumWidth(80)
-        self.obj_2_sbx.setEnabled(False)
-        self.obj_2_value = self.obj_2_sbx.value()
-        self.obj_3_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
-        self.obj_3_sbx.setMaximumWidth(80)
-        self.obj_3_sbx.setEnabled(False)
-        self.obj_3_value = self.obj_3_sbx.value()
-        self.obj_sbx_list = [self.obj_1_sbx, self.obj_2_sbx, self.obj_3_sbx]
+    def _create_proportion_layout(self):
+        self._create_proportion_controls()
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.obj_1_lbl, 0, 0)
         layout.addWidget(self.obj_1_sbx, 0, 1)
@@ -117,10 +102,26 @@ class ScatterUI(QtWidgets.QDialog):
         layout.addWidget(self.obj_3_sbx, 2, 1)
         return layout
 
-    def _create_modifier_ui(self):
+    def _create_proportion_controls(self):
+        self.obj_1_lbl = QtWidgets.QLabel("")
+        self.obj_2_lbl = QtWidgets.QLabel("")
+        self.obj_3_lbl = QtWidgets.QLabel("")
+        self.lbl_list = [self.obj_1_lbl, self.obj_2_lbl, self.obj_3_lbl]
+        self.obj_1_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
+        self.obj_1_sbx.setEnabled(False)
+        self.obj_1_value = self.obj_1_sbx.value()
+        self.obj_2_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
+        self.obj_2_sbx.setEnabled(False)
+        self.obj_2_value = self.obj_2_sbx.value()
+        self.obj_3_sbx = self._create_double_sbx("%", [0.0, 100.0], 1)
+        self.obj_3_sbx.setEnabled(False)
+        self.obj_3_value = self.obj_3_sbx.value()
+        self.obj_sbx_list = [self.obj_1_sbx, self.obj_2_sbx, self.obj_3_sbx]
+
+    def _create_modifier_layout(self):
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(QtWidgets.QLabel("Random Rotation Range"))
-        layout.addLayout(self._create_rotation_controls())
+        layout.addLayout(self._create_rotation_layout())
         layout.addSpacerItem(
             QtWidgets.QSpacerItem(150, 30, QtWidgets.QSizePolicy.Expanding))
         layout.addWidget(QtWidgets.QLabel("Random Scale Range"))
@@ -128,10 +129,16 @@ class ScatterUI(QtWidgets.QDialog):
         layout.addSpacerItem(
             QtWidgets.QSpacerItem(150, 30, QtWidgets.QSizePolicy.Expanding))
         layout.addWidget(QtWidgets.QLabel("Miscellaneous"))
-        layout.addLayout(self._create_misc_modifiers())
+        layout.addLayout(self._create_misc_layout())
         return layout
 
-    def _create_rotation_controls(self):
+    def _create_rotation_layout(self):
+        self._create_rotation_labels()
+        self._create_rotation_spinboxes()
+        layout = self._assemble_rotation_layout()
+        return layout
+
+    def _create_rotation_labels(self):
         self.x_axis_lbl = QtWidgets.QLabel("X-Axis")
         self.x_neg_lbl = QtWidgets.QLabel("Pos")
         self.x_pos_lbl = QtWidgets.QLabel("Neg")
@@ -143,13 +150,14 @@ class ScatterUI(QtWidgets.QDialog):
         self.z_pos_lbl = QtWidgets.QLabel("Neg")
         self._align_widgets([self.x_neg_lbl, self.x_pos_lbl, self.y_neg_lbl,
                              self.y_pos_lbl, self.z_neg_lbl, self.z_pos_lbl])
+
+    def _create_rotation_spinboxes(self):
         self.x_neg_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
         self.x_pos_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
         self.y_neg_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
         self.y_pos_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
         self.z_neg_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
         self.z_pos_sbx = self._create_double_sbx(" Deg", [0.0, 180.0], 0.1)
-        return self._assemble_rotation_layout()
 
     def _assemble_rotation_layout(self):
         layout = QtWidgets.QGridLayout()
@@ -203,7 +211,7 @@ class ScatterUI(QtWidgets.QDialog):
             widget.setMinimumHeight(30)
             widget.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
 
-    def _create_misc_modifiers(self):
+    def _create_misc_layout(self):
         self.density_lbl = QtWidgets.QLabel("Scatter Density")
         self.orient_lbl = QtWidgets.QLabel("Orient to Normals")
         self._align_widgets([self.density_lbl, self.orient_lbl])
@@ -242,28 +250,45 @@ class ScatterUI(QtWidgets.QDialog):
     def _select_obj(self):
         self.scatter.set_scatter_obj()
         if 0 < len(self.scatter.scatter_objs) < 4:
-            target_str = ""
-            for idx in range(len(self.scatter.scatter_objs)):
-                target_str += self.scatter.scatter_objs[idx]
-                if idx is not len(self.scatter.scatter_objs) - 1:
-                    target_str += ", "
-                self.obj_sbx_list[idx].setEnabled(True)
-            self.obj_le.setText(target_str)
+            display_str = self._create_list_string(self.scatter.scatter_objs)
+            self.obj_le.setText(display_str)
             self._update_proportion_controls()
         else:
             self.obj_le.clear()
             MGlobal.displayError(
                 "Failed to get scatter object. Select up to three objects in "
                 "Object Mode and press \"Get From Selection\"")
+            self._reset_proportion_controls()
         self._update_scatter_btn_state()
 
-    # TODO this is kind of repetitive from the scatter object method
+    def _update_proportion_controls(self):
+        self._reset_proportion_controls()
+        total = 0
+        objects = len(self.scatter.scatter_objs)
+        for count in range(objects):
+            self.obj_sbx_list[count].setEnabled(True)
+            self.lbl_list[count].setText(self.scatter.scatter_objs[count])
+            if count is objects - 1:
+                self.obj_sbx_list[count].setValue(100 - total)
+            else:
+                val = int(100 / objects)
+                self.obj_sbx_list[count].setValue(val)
+                total += val
+        self._update_spinbox_value_stores()
+
+    def _reset_proportion_controls(self):
+        for count in range(len(self.obj_sbx_list)):
+            self.obj_sbx_list[count].setEnabled(False)
+            self.obj_sbx_list[count].setValue(0)
+            self.lbl_list[count].setText("")
+
     @QtCore.Slot()
     def _select_target(self):
         self.scatter.set_scatter_targets()
         full_targets = self.scatter.target_objs + self.scatter.target_verts
         if len(full_targets) > 0:
-            self.target_le.setText(self._create_list_string(full_targets))
+            display_str = self._create_list_string(full_targets)
+            self.target_le.setText(display_str)
         else:
             self.target_le.clear()
             MGlobal.displayError(
@@ -284,8 +309,8 @@ class ScatterUI(QtWidgets.QDialog):
     def _scatter(self):
         """Retrieves scatter modifiers from UI and then runs scatter."""
         if not cmds.objExists(self.scatter.scatter_objs[0]):
-            MGlobal.displayError("One or more specified scatter do not exist. "
-                                 "Please reselect.")
+            MGlobal.displayError("One or more specified scatter objects do  "
+                                 "not exist. Please reselect.")
             self.obj_le.clear()
             self._update_scatter_btn_state()
             return
@@ -313,22 +338,6 @@ class ScatterUI(QtWidgets.QDialog):
     def _update_spinbox_3(self):
         self._update_spinboxes(self.obj_3_sbx, self.obj_3_value,
                                self._find_remaining_spinboxes(self.obj_3_sbx))
-
-    def _update_proportion_controls(self):
-        for count in range(len(self.obj_sbx_list)):
-            self.obj_sbx_list[count].setEnabled(False)
-            self.obj_sbx_list[count].setValue(0)
-        total = 0
-        object_count = len(self.scatter.scatter_objs)
-        for count in range(object_count):
-            self.obj_sbx_list[count].setEnabled(True)
-            if count is object_count - 1:
-                self.obj_sbx_list[count].setValue(100 - total)
-            else:
-                val = int(100 / object_count)
-                self.obj_sbx_list[count].setValue(val)
-                total += val
-        self._update_spinbox_value_stores()
 
     def _find_remaining_spinboxes(self, target_sbx):
         active_sbxs = []
@@ -414,37 +423,36 @@ class ScatterTool(object):
         self.target_objs = obj_targets
         self.target_verts = vert_targets
 
-    # TODO this is garbage holy hell
     def scatter(self):
         """Scatters the target object across vertices list.
 
         Return:
             String: The group name of the scattered objects.
         """
-        combined_verts = self.target_verts
+        vertices = self.target_verts
         for obj in self.target_objs:
-            combined_verts += cmds.ls(obj + ".vtx[*]", flatten=True)
+            vertices += cmds.ls(obj + ".vtx[*]", flatten=True)
         if self.scatter_density < 1.0:
-            combined_verts = self._sample_vertices(combined_verts)
+            vertices = self._sample_vertices(vertices)
+        obj_counts = []
         if 100 not in self.obj_proportions:
-            proportions = []
             for idx in range(len(self.obj_proportions)):
-                if self.obj_proportions[idx] is not 0:
-                    proportions.append((self.obj_proportions[idx] / 100) *
-                                        len(combined_verts))
-            combined_verts = random.sample(combined_verts, len(combined_verts))
-        else:
-            proportions = [len(combined_verts)]
-        self._instance_scatter_objects(combined_verts, proportions)
+                count = math.ceil(
+                    self.obj_proportions[idx] / 100 * len(vertices))
+                obj_counts.append(count)
+            vertices = random.sample(vertices, len(vertices))
+        self._instance_scatter_objects(vertices, obj_counts)
 
-    def _instance_scatter_objects(self, verts, prop_list):
+    def _instance_scatter_objects(self, verts, counts):
         scattered = []
         obj_idx = 0
+        print(counts)
+        print(range(len(verts)))
         scale = cmds.getAttr("{}.scale".format(self.scatter_objs[obj_idx]))[0]
         for count in range(len(verts)):
-            if count >= prop_list[0]:
+            if count >= counts[0]:
                 obj_idx += 1
-                prop_list[0] = prop_list[obj_idx]
+                counts[0] = counts[obj_idx] + counts[0]
                 scale = cmds.getAttr(
                     "{}.scale".format(self.scatter_objs[obj_idx]))[0]
             instance = cmds.instance(self.scatter_objs[obj_idx])
