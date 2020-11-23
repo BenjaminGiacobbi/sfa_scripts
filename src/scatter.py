@@ -440,17 +440,20 @@ class ScatterTool(object):
                 count = int(self.obj_proportions[idx] / 100 * len(vertices))
                 obj_counts.append(count)
             vertices = random.sample(vertices, len(vertices))
+        print(obj_counts)
         self._instance_scatter_objects(vertices, obj_counts)
 
     def _instance_scatter_objects(self, verts, counts):
         scattered = []
         obj_idx = 0
-        instance_no = 0
-        scale = cmds.getAttr("{}.scale".format(self.scatter_objs[obj_idx]))[0]
+        instance_no = 1
+        scale = cmds.getAttr(
+            "{}.scale".format(self.scatter_objs[obj_idx]))[0]
         for vert in verts:
-            if instance_no >= counts[obj_idx] and obj_idx < 2:
+            if counts and instance_no > counts[obj_idx] \
+                    and obj_idx < len(self.scatter_objs) - 1:
                 obj_idx += 1
-                instance_no = 0
+                instance_no = 1
                 scale = cmds.getAttr(
                     "{}.scale".format(self.scatter_objs[obj_idx]))[0]
             instance = cmds.instance(self.scatter_objs[obj_idx])
