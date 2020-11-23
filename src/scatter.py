@@ -429,8 +429,8 @@ class ScatterTool(object):
         Return:
             String: The group name of the scattered objects.
         """
-        vertices = self.target_verts
-        for obj in self.target_objs:
+        vertices = self.target_verts[:]
+        for obj in self.target_objs[:]:
             vertices += cmds.ls(obj + ".vtx[*]", flatten=True)
         if self.scatter_density < 1.0:
             vertices = self._sample_vertices(vertices)
@@ -473,7 +473,6 @@ class ScatterTool(object):
     def _apply_transforms(self, instance, vertex, scale):
         """Tests modifier conditions and applies transformations to the
         instanced object"""
-        print(vertex)
         pos = cmds.pointPosition(vertex, world=True)
         cmds.select(instance, r=True)
         cmds.move(pos[0], pos[1], pos[2], a=True)
